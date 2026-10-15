@@ -1007,7 +1007,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-05 · v112";
+const BUILD = "2026-10-15 · v113";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -5793,7 +5793,7 @@ function studentSheet(existing) {
             ["company", "算公司的"],
             ["independent", "自己接的"],
           ], s.employment || "")}
-        <p class="hint">同時是承攬教練又自己接案才需要動這格。「算公司的」走薪資試算（底薪、鐘點抽成、業績獎金）；「自己接的」不進薪資，改成毛收入扣場地成本。</p>` : ""}
+        <p class="hint">同時有公司的學生又自己接案才需要動這格。「算公司的」走薪資試算（底薪、鐘點抽成、業績獎金）；「自己接的」不進薪資，改成毛收入扣場地成本。</p>` : ""}
       <div class="field-row">
         ${fieldSelect("status", "狀態",
             [["active", "在檔"], ["paused", "暫停"], ["awaiting", "課程結束待續約"], ["archived", "封存"]],
@@ -9222,12 +9222,12 @@ function viewSettings() {
         <div class="divider" style="margin:14px 0"></div>
         <p class="sec-sub" style="margin:0 0 9px">身份</p>
         <div class="seg" style="max-width:340px">
-          ${[["coach", "教練"], ["contractor", "承攬教練"]].map(([v, t]) =>
+          ${[["coach", "俱樂部教練"], ["contractor", "自由教練"]].map(([v, t]) =>
             `<button type="button" data-action="set-role" data-value="${v}" aria-pressed="${roleOf() === v}">${t}</button>`).join("")}
         </div>
         <p class="row-sub" style="margin-top:9px">${isContractor()
           ? "在健身房或場館授課，排課時要登記上課地點。"
-          : "獨立授課，不需區分上課地點（排課表單就不會出現那一格）。"}</p>
+          : "在固定的俱樂部授課，不需區分上課地點（排課表單就不會出現那一格）。"}</p>
 
         <div class="divider" style="margin:14px 0"></div>
         <p class="sec-sub" style="margin:0 0 9px">計費方式</p>
