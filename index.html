@@ -1007,7 +1007,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-15 · v113";
+const BUILD = "2026-10-17 · v114";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -3063,11 +3063,16 @@ function removeTagEverywhere(tagId) {
 
 /* ── 成交率 ─────────────────────────────────── */
 
+/**
+ * 「本月名單轉換」＝本月轉正式 ÷ 本月新增名單。分子分母不是同一批人，會超過 100%，不夾。
+ * 名字刻意不叫「成交率」：檢測卡已經有一個「本月成交率」，兩個同名數字對不起來會被當成 bug
+ * （2026-10-17 Bear 回報）。哪個月轉正式看 convertedAt；舊資料沒有就退回 updatedAt。
+ */
 function conversionStats(ym = thisMonth()) {
   const leads = S.leads;
   const converted = leads.filter((l) => l.status === "converted");
   const addedThisMonth = leads.filter((l) => (l.createdAt || "").slice(0, 7) === ym);
-  const convertedThisMonth = converted.filter((l) => (l.updatedAt || "").slice(0, 7) === ym);
+  const convertedThisMonth = converted.filter((l) => (l.convertedAt || l.updatedAt || "").slice(0, 7) === ym);
   const bySource = Object.keys(LEAD_SOURCE).map((key) => {
     const group = leads.filter((l) => l.source === key);
     return { key, label: LEAD_SOURCE[key], total: group.length, converted: group.filter((l) => l.status === "converted").length };
@@ -3879,9 +3884,9 @@ function viewDashboard() {
             <div class="tiles" style="grid-template-columns:1fr 1fr">
               ${tile({ value: conv.rate === null ? "—" : conv.rate.toFixed(0) + "%", label: "累計成交率",
                        iconName: "target", color: "var(--accent)", note: `${conv.converted} / ${conv.total} 筆` })}
-              ${tile({ value: conv.monthRate === null ? "—" : conv.monthRate.toFixed(0) + "%", label: "本月成交率",
+              ${tile({ value: conv.monthRate === null ? "—" : conv.monthRate.toFixed(0) + "%", label: "本月名單轉換",
                        iconName: "target", color: "var(--good)",
-                       note: conv.addedThisMonth ? `${conv.convertedThisMonth} / ${conv.addedThisMonth} 筆` : "本月沒有新名單" })}
+                       note: conv.addedThisMonth ? `轉正式 ${conv.convertedThisMonth}／新名單 ${conv.addedThisMonth}` : "本月沒有新名單" })}
             </div>
             <p class="row-sub" style="margin-top:10px">還有 ${conv.open} 位待追蹤，明細在「分析」頁。</p>
           ` : `<p class="empty" style="padding-bottom:6px">潛在客群是還沒買課的人。記下來之後，成交率會自動算出來。</p>`}
@@ -7238,6 +7243,13 @@ function lessonSheet(existing, presetKind = "lesson", presetStudentId = "") {
  * 套用檢測結果。成交就把名單轉成正式學生，沒成交留在待追蹤名單。
  * iOS 版是同一套邏輯，兩邊要一致。
  */
+/** 改名單狀態一律走這裡：「變成」已轉正式的那一下記 convertedAt，離開就清掉。 */
+function setLeadStatus(lead, status) {
+  if (status === "converted" && lead.status !== "converted") lead.convertedAt = new Date().toISOString();
+  else if (status !== "converted") delete lead.convertedAt;
+  lead.status = status;
+}
+
 function applyOutcome(lesson, outcome) {
   lesson.outcome = outcome;
   // 時段已經過了就當作有做，這樣它才會從待回報清單消失
@@ -7248,7 +7260,7 @@ function applyOutcome(lesson, outcome) {
   lead.updatedAt = new Date().toISOString();
 
   if (outcome === "closed") {
-    lead.status = "converted";
+    setLeadStatus(lead, "converted");
     // 同名同電話已經有學生就沿用，不要又開一筆重複的
     const existing = S.students.find((s) =>
       s.name === lead.name && (s.phone || "") === (lead.phone || ""));
@@ -7265,7 +7277,7 @@ function applyOutcome(lesson, outcome) {
 
   if (outcome === "notClosed" || outcome === "followUp") {
     // 檢測過但還沒買，跟「還沒聯繫過」是不同的階段
-    lead.status = "assessed";
+    setLeadStatus(lead, "assessed");
   }
   return null;
 }
@@ -8857,9 +8869,9 @@ function viewAnalysis() {
           <div class="tiles">
             ${tile({ value: conv.rate === null ? "—" : conv.rate.toFixed(0) + "%", label: "累計成交率",
                      iconName: "target", color: "var(--accent)", note: `${conv.converted} / ${conv.total} 筆` })}
-            ${tile({ value: conv.monthRate === null ? "—" : conv.monthRate.toFixed(0) + "%", label: "本月成交率",
+            ${tile({ value: conv.monthRate === null ? "—" : conv.monthRate.toFixed(0) + "%", label: "本月名單轉換",
                      iconName: "target", color: "var(--good)",
-                     note: conv.addedThisMonth ? `${conv.convertedThisMonth} / ${conv.addedThisMonth} 筆` : "本月沒有新名單" })}
+                     note: conv.addedThisMonth ? `轉正式 ${conv.convertedThisMonth}／新名單 ${conv.addedThisMonth}` : "本月沒有新名單" })}
             ${tile({ value: conv.open, unit: "位", label: "還在追", iconName: "people", color: "var(--warn)",
                      note: "尚未轉正式" })}
           </div>
@@ -9833,6 +9845,7 @@ function buildBackup() {
       sourceRaw: l.source === "walkIn" ? "walk-in" : l.source,
       statusRaw: l.status, notes: l.notes || "",
       createdAt: iso(l.createdAt), updatedAt: iso(l.updatedAt),
+      ...(l.convertedAt ? { convertedAt: iso(l.convertedAt) } : {}),
     })),
     // 場地成本（costMode／costValue）是網頁多出來的欄位，iOS 讀到不認得的鍵
     // 會直接忽略 —— 但它匯出時也不會帶回來，所以匯入那邊要按名字合併。
@@ -10131,6 +10144,7 @@ function parseBackup(raw) {
     notes: d.notes || "",
     createdAt: d.createdAt || new Date().toISOString(),
     updatedAt: d.updatedAt || new Date().toISOString(),
+    ...(d.convertedAt ? { convertedAt: d.convertedAt } : {}),
   }));
 
   const lessons = (raw.lessons || []).map((d) => ({
@@ -10912,7 +10926,7 @@ document.addEventListener("change", (e) => {
       const lead = S.leads.find((x) => x.id === id);
       if (!lead) return;
       const wasConverted = lead.status === "converted";
-      lead.status = el.value;
+      setLeadStatus(lead, el.value);
       lead.updatedAt = new Date().toISOString();
       save();
       if (!wasConverted && el.value === "converted") {
