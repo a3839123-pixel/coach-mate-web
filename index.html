@@ -45,6 +45,9 @@ body {padding-top:56px;}
 .cm-edit-training {table-layout:fixed;min-width:310px;}
 .cm-training-table input,.cm-training-table select {min-width:0;width:100%;padding:8px 5px;}
 .cm-training-table select {margin-top:5px;}
+.cm-weight-control {display:flex;align-items:center;gap:4px;}
+.cm-weight-control input {flex:1;min-width:0;width:0;}
+.cm-weight-control select {flex:0 0 40px;width:40px;min-width:0;margin:0;padding:8px 2px;font-size:12px;text-align:center;appearance:none;}
 .cm-training-table .cm-exercise {border:0;}
 .cm-training-table .btn {padding:7px;min-width:26px;}
 .cm-exercise-select {width:100%;min-height:38px;text-align:left;padding:8px 5px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;overflow-wrap:anywhere;}
@@ -1061,7 +1064,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-25 · cloud-5";
+const BUILD = "2026-10-25 · cloud-6";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -11710,13 +11713,12 @@ function trainingSheet(lesson,studentId) {
   const contract=trainingContractProgress(student);const {bought,used}=contract;
   let changed=false;
   const markup=x=>`<tr class="cm-exercise"><td><button type="button" class="cm-exercise-select" data-select-exercise aria-haspopup="dialog">${esc(x.name||'選擇動作')} ▾</button><input type="hidden" data-f="name" value="${esc(x.name||'')}"></td>
-    <td><input aria-label="重量" type="number" min="0" step="0.1" data-f="weight" value="${esc(String(x.weight??0))}">
-    <select aria-label="重量單位" data-f="unit"><option value="kg" ${x.unit!=='lb'?'selected':''}>kg</option><option value="lb" ${x.unit==='lb'?'selected':''}>lb</option></select></td>
+    <td><div class="cm-weight-control"><input aria-label="重量" type="number" min="0" step="0.1" data-f="weight" value="${esc(String(x.weight??0))}">
+    <select aria-label="重量單位" data-f="unit"><option value="kg" ${x.unit!=='lb'?'selected':''}>kg</option><option value="lb" ${x.unit==='lb'?'selected':''}>lb</option></select></div></td>
     <td><input aria-label="次數" type="number" min="1" step="1" data-f="reps" value="${esc(String(x.reps??10))}"></td>
     <td><input aria-label="組數" type="number" min="1" step="1" data-f="sets" value="${esc(String(x.sets??3))}"></td>
     <td><button class="btn btn-sm" type="button" aria-label="移除此動作" data-remove-exercise>×</button></td></tr>`;
-  openSheet({title:student.name+'｜'+lesson.date.slice(5).replace('-','/')+' '+lesson.start,body:`
-    <div class="cm-session-summary"><strong>${esc(String(bought))}－${esc(String(used))}</strong><span>本期合約 ${esc(String(bought))} 堂・本期已上 ${esc(String(used))} 堂</span></div>
+  openSheet({title:student.name+'｜'+lesson.date.slice(5).replace('-','/')+' '+lesson.start+'｜'+bought+'－'+used,body:`
     <h3>這堂訓練內容</h3>
     <div class="cm-actions"><button class="btn" type="button" id="cm-add-exercise">新增動作</button>
     <button class="btn" type="button" id="cm-copy-last" ${previous?'':'disabled'}>帶入上次${previous?'（'+esc(previous.date)+'）':''}</button></div>
