@@ -48,6 +48,9 @@ body {padding-top:56px;}
 .cm-training-table .cm-exercise {border:0;}
 .cm-training-table .btn {padding:7px;min-width:26px;}
 .cm-exercise-select {width:100%;min-height:38px;text-align:left;padding:8px 5px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;overflow-wrap:anywhere;}
+.cm-calendar-student {font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:4px;}
+.cm-calendar-student:focus-visible {outline:2px solid var(--accent);outline-offset:3px;}
+.cm-calendar-student:hover {text-decoration:underline;text-underline-offset:3px;}
 .cm-exercise-picker {position:fixed;inset:0;z-index:120;background:#0007;display:grid;place-items:center;padding:18px;}
 .cm-picker-card {width:min(100%,500px);max-height:82vh;overflow:auto;padding:18px;background:var(--surface);color:var(--ink);border-radius:16px;box-shadow:0 12px 40px #0003;}
 .cm-picker-heading {display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;}
@@ -1058,7 +1061,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-25 · cloud-3";
+const BUILD = "2026-10-25 · cloud-4";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -1087,7 +1090,7 @@ const GUIDE_MD = `
 
 ## 每堂訓練
 
-點上方「訓練紀錄」，選學生，再選要記錄的課程。每個動作可填重量、單位、次數與組數，並加上當天備註。「帶入上次」會複製同一學生較早的一筆紀錄，修改後不影響之前的內容。一對二學生各自保存。
+在課表點學員姓名，可直接編輯該日期與時段的訓練；一對二可分別點兩位姓名。也可以從上方「訓練紀錄」選學生與課程。動作可搜尋選取，重量、次數與組數自行填寫。「上次訓練內容」位於當天備註下方；「帶入上次」複製後修改不影響原紀錄。
 
 ## 同步
 
@@ -6831,7 +6834,7 @@ function viewCalendar() {
           <div class="row">
             <span class="dot" style="background:${esc(lessonColor(l))}"></span>
             <div class="row-main">
-              <div class="row-title">${esc(names)}
+              <div class="row-title">${assess ? esc(names) : calendarTrainingNames(l)}
                 ${assess ? `<span class="pill" style="background:${LESSON_KIND.assessment.color}22;color:${LESSON_KIND.assessment.color}">檢測</span>` : ""}
                 <span class="pill ${meta.pill}">${meta.label}</span>
                 ${assess && outcomeOf(l) !== "pending" ? `<span class="pill ${oc.pill}">${oc.label}</span>` : ""}
@@ -10588,6 +10591,7 @@ document.addEventListener("click", (e) => {
     case "new-student": studentSheet(null); break;
     case "view-student": studentTrainingEntry(studentById(id)); break;
     case "edit-student": studentSheet(studentById(id)); break;
+    case "view-training": calendarTrainingEntry(id, el.dataset.studentId); break;
     case "renew": renewSheet(studentById(id)); break;
     // 單堂制那一列的「記收費」：直接把收費表單開在這位學生身上。
     case "pay-student": paymentSheet(studentById(id)); break;
@@ -11609,6 +11613,18 @@ function studentTrainingEntry(student) {
     confirmLabel:'替這位學生排課',onConfirm:()=>{lessonSheet(null,'lesson',student.id);return false;},
     onMount:root=>root.querySelector('#cm-empty-student-detail').onclick=()=>studentDetailSheet(student)});
 }
+function calendarTrainingNames(lesson) {
+  const students=[lesson.studentId,lesson.partnerId].filter(Boolean).map(studentById).filter(Boolean);
+  if(!students.length)return '（未指定學生）';
+  return students.map(student=>`<button type="button" class="btn-plain cm-calendar-student" data-action="view-training" data-id="${esc(lesson.id)}" data-student-id="${esc(student.id)}" aria-label="編輯${esc(student.name)} ${esc(lesson.date)} ${esc(lesson.start)}的訓練內容">${esc(student.name)}</button>`).join('＋');
+}
+function calendarTrainingEntry(lessonId,studentId) {
+  const lesson=S.lessons.find(l=>l.id===lessonId);
+  if(!lesson||isAssessment(lesson)||![lesson.studentId,lesson.partnerId].includes(studentId)){
+    toast('找不到這堂學生課程');return;
+  }
+  trainingSheet(lesson,studentId);
+}
 function previousTrainingLesson(lesson,studentId) {
   const now=new Date();const day=today();const time=now.getHours()*60+now.getMinutes();
   return trainingLessons(studentId).find(l=>l.id!==lesson.id&&l.status!=='cancelled'&&l.status!=='absent'
@@ -11703,12 +11719,12 @@ function trainingSheet(lesson,studentId) {
     <div class="cm-session-summary"><strong>${esc(String(bought))}－${esc(String(used))}</strong><span>本期合約 ${esc(String(bought))} 堂・本期已上 ${esc(String(used))} 堂</span></div>
     ${contract.main?`<p class="hint">本期合約日期：${esc(contract.main.date||'未填寫')}${contract.carry||contract.addOn?`；另有${contract.carry?'結轉 '+contract.carry+' 堂':''}${contract.carry&&contract.addOn?'、':''}${contract.addOn?'加購 '+contract.addOn+' 堂':''}。進度按先用結轉、再主約、最後加購計算。`:''}</p>`:''}
     <label class="cm-course-picker">這堂課<select id="cm-training-course">${trainingLessons(studentId).map(l=>`<option value="${esc(l.id)}" ${l.id===lesson.id?'selected':''}>${esc(l.date)} ${esc(l.start)}${l.status==='cancelled'?'（已取消）':l.status==='absent'?'（缺席）':''}</option>`).join('')}</select></label>
-    ${trainingReferenceMarkup(previous,studentId)}
     <h3>這堂訓練內容</h3>
     <div class="cm-actions"><button class="btn" type="button" id="cm-add-exercise">新增動作</button>
     <button class="btn" type="button" id="cm-copy-last" ${previous?'':'disabled'}>帶入上次${previous?'（'+esc(previous.date)+'）':''}</button></div>
     <div class="cm-training-table-wrap"><table class="cm-training-table cm-edit-training"><colgroup><col style="width:36%"><col style="width:24%"><col style="width:15%"><col style="width:15%"><col style="width:10%"></colgroup><thead><tr><th>動作</th><th>重量</th><th>次數</th><th>組數</th><th></th></tr></thead><tbody id="cm-exercises">${draft.exercises.map(markup).join('')}</tbody></table></div>
     <label>當天備註<textarea id="cm-training-notes" maxlength="5000">${esc(draft.notes||'')}</textarea></label>
+    ${trainingReferenceMarkup(previous,studentId)}
     <p class="hint">填寫訓練不會扣堂或更改上課狀態。</p>`,
     extraFoot:'<button class="btn btn-sm" type="button" id="cm-open-student-detail">學生資料</button>',
     autoFocus:false,confirmLabel:'儲存這堂紀錄',onMount:root=>{
