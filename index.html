@@ -33,7 +33,7 @@ body {padding-top:56px;}
 .cm-session-summary {display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:14px;}
 .cm-session-summary strong {font-size:24px;color:var(--accent);}
 .cm-session-summary span {font-size:13px;color:var(--muted);}
-.cm-course-picker {display:block;margin-bottom:18px;}
+.cm-course-picker {display:block;margin:16px 0 18px;}
 .cm-previous {padding:14px;margin:16px 0 22px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);}
 .cm-previous h3 {font-size:15px;margin:0 0 6px;}
 .cm-previous p {margin:6px 0 10px;font-size:13px;}
@@ -1061,7 +1061,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-25 · cloud-4";
+const BUILD = "2026-10-25 · cloud-5";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -11717,13 +11717,12 @@ function trainingSheet(lesson,studentId) {
     <td><button class="btn btn-sm" type="button" aria-label="移除此動作" data-remove-exercise>×</button></td></tr>`;
   openSheet({title:student.name+'｜'+lesson.date.slice(5).replace('-','/')+' '+lesson.start,body:`
     <div class="cm-session-summary"><strong>${esc(String(bought))}－${esc(String(used))}</strong><span>本期合約 ${esc(String(bought))} 堂・本期已上 ${esc(String(used))} 堂</span></div>
-    ${contract.main?`<p class="hint">本期合約日期：${esc(contract.main.date||'未填寫')}${contract.carry||contract.addOn?`；另有${contract.carry?'結轉 '+contract.carry+' 堂':''}${contract.carry&&contract.addOn?'、':''}${contract.addOn?'加購 '+contract.addOn+' 堂':''}。進度按先用結轉、再主約、最後加購計算。`:''}</p>`:''}
-    <label class="cm-course-picker">這堂課<select id="cm-training-course">${trainingLessons(studentId).map(l=>`<option value="${esc(l.id)}" ${l.id===lesson.id?'selected':''}>${esc(l.date)} ${esc(l.start)}${l.status==='cancelled'?'（已取消）':l.status==='absent'?'（缺席）':''}</option>`).join('')}</select></label>
     <h3>這堂訓練內容</h3>
     <div class="cm-actions"><button class="btn" type="button" id="cm-add-exercise">新增動作</button>
     <button class="btn" type="button" id="cm-copy-last" ${previous?'':'disabled'}>帶入上次${previous?'（'+esc(previous.date)+'）':''}</button></div>
     <div class="cm-training-table-wrap"><table class="cm-training-table cm-edit-training"><colgroup><col style="width:36%"><col style="width:24%"><col style="width:15%"><col style="width:15%"><col style="width:10%"></colgroup><thead><tr><th>動作</th><th>重量</th><th>次數</th><th>組數</th><th></th></tr></thead><tbody id="cm-exercises">${draft.exercises.map(markup).join('')}</tbody></table></div>
     <label>當天備註<textarea id="cm-training-notes" maxlength="5000">${esc(draft.notes||'')}</textarea></label>
+    <label class="cm-course-picker">這堂課<select id="cm-training-course">${trainingLessons(studentId).map(l=>`<option value="${esc(l.id)}" ${l.id===lesson.id?'selected':''}>${esc(l.date)} ${esc(l.start)}${l.status==='cancelled'?'（已取消）':l.status==='absent'?'（缺席）':''}</option>`).join('')}</select></label>
     ${trainingReferenceMarkup(previous,studentId)}
     <p class="hint">填寫訓練不會扣堂或更改上課狀態。</p>`,
     extraFoot:'<button class="btn btn-sm" type="button" id="cm-open-student-detail">學生資料</button>',
