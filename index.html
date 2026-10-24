@@ -47,6 +47,17 @@ body {padding-top:56px;}
 .cm-training-table select {margin-top:5px;}
 .cm-training-table .cm-exercise {border:0;}
 .cm-training-table .btn {padding:7px;min-width:26px;}
+.cm-exercise-select {width:100%;min-height:38px;text-align:left;padding:8px 5px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;overflow-wrap:anywhere;}
+.cm-exercise-picker {position:fixed;inset:0;z-index:120;background:#0007;display:grid;place-items:center;padding:18px;}
+.cm-picker-card {width:min(100%,500px);max-height:82vh;overflow:auto;padding:18px;background:var(--surface);color:var(--ink);border-radius:16px;box-shadow:0 12px 40px #0003;}
+.cm-picker-heading {display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;}
+.cm-picker-heading h3 {margin:0;}
+.cm-picker-card input,.cm-picker-card select {display:block;width:100%;margin-bottom:10px;}
+#cm-exercise-options {max-height:43vh;overflow:auto;overscroll-behavior:contain;}
+.cm-exercise-option {display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;padding:12px 8px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);text-align:left;font:inherit;cursor:pointer;}
+.cm-exercise-option small {font-size:11px;color:var(--muted);white-space:nowrap;}
+.cm-exercise-option[aria-pressed=true] {background:var(--surface-2);font-weight:700;}
+#cm-custom-exercise {margin-top:12px;max-width:100%;white-space:normal;overflow-wrap:anywhere;}
 @media(max-width:420px){#cm-bar {gap:4px;padding:5px 7px;}#cm-bar .btn{font-size:11px;padding:6px;} .cm-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 </style>
 </head>
@@ -1047,7 +1058,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-25 · cloud-2";
+const BUILD = "2026-10-25 · cloud-3";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -11625,21 +11636,72 @@ function trainingHub() {
   openSheet({title:'學生訓練歷史',body:`<label>選擇學生<select id="cm-pick-student">${S.students.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>`,
     confirmLabel:'查看紀錄',onConfirm:f=>{const student=studentById(f.querySelector('select').value);if(student){trainingHistory(student);return false;}toast('請先新增學生');return false;}});
 }
+// 主約堂數採先用完上期結轉、再用主約、最後使用加購；不加入歷年已上課程。
+function trainingContractProgress(student) {
+  const bought=Math.max(0,+currentPackageSessions(student)||0);
+  const carry=Math.max(0,+carryOverOf(student)||0);
+  const addOn=Math.max(0,+addOnSessions(student)||0);
+  const remaining=Math.max(0,+student.remaining||0);
+  const used=Math.min(bought,Math.max(0,bought+addOn-remaining));
+  return {bought,used,carry,addOn,main:currentPackageParts(student).main};
+}
+const TRAINING_EXERCISE_GROUPS = {
+  '腿部／臀部': ['深蹲','徒手深蹲','槓鈴背蹲','槓鈴前蹲','高腳杯深蹲','箱式深蹲','史密斯深蹲','相撲深蹲','哈克深蹲','腿推','單腳腿推','弓箭步','後跨弓箭步','行走弓箭步','側弓箭步','保加利亞分腿蹲','分腿蹲','登階','單腳蹲','硬舉','羅馬尼亞硬舉','相撲硬舉','六角槓硬舉','單腳羅馬尼亞硬舉','早安式','臀推','槓鈴臀推','單腳臀推','臀橋','單腳臀橋','腿屈伸','坐姿腿彎舉','俯臥腿彎舉','北歐腿彎舉','髖外展','髖內收','滑輪後踢腿','彈力帶側走','蚌殼式','站姿提踵','坐姿提踵','單腳提踵','壺鈴擺盪'],
+  '背部': ['划船','滑輪下拉','寬握下拉','窄握下拉','反握下拉','直臂下拉','引體向上','輔助引體向上','反握引體向上','槓鈴划船','啞鈴划船','單臂啞鈴划船','坐姿划船','胸靠划船','T槓划船','地雷管划船','反向划船','滑輪單臂划船','機械式划船','面拉','啞鈴聳肩','槓鈴聳肩','背部伸展'],
+  '胸部': ['伏地挺身','跪姿伏地挺身','上斜伏地挺身','下斜伏地挺身','槓鈴臥推','啞鈴臥推','上斜槓鈴臥推','上斜啞鈴臥推','下斜臥推','史密斯臥推','機械式胸推','滑輪胸推','啞鈴飛鳥','上斜啞鈴飛鳥','滑輪夾胸','蝴蝶機夾胸','雙槓撐體','啞鈴上拉'],
+  '肩部': ['肩推','啞鈴肩推','槓鈴肩推','坐姿肩推','阿諾肩推','機械式肩推','地雷管肩推','啞鈴側平舉','滑輪側平舉','機械式側平舉','前平舉','俯身反向飛鳥','反向蝴蝶機','滑輪反向飛鳥','直立划船','肩外旋','肩內旋','Y字上舉','牆面滑手'],
+  '手臂': ['啞鈴二頭彎舉','槓鈴二頭彎舉','錘式彎舉','集中彎舉','牧師椅彎舉','上斜啞鈴彎舉','滑輪二頭彎舉','反向彎舉','三頭下壓','繩索三頭下壓','過頭三頭伸展','仰臥三頭伸展','啞鈴後踢','窄握臥推','窄距伏地挺身','腕彎舉','反向腕彎舉'],
+  '核心／全身': ['平板撐','側平板撐','死蟲式','鳥狗式','捲腹','反向捲腹','懸垂抬膝','懸垂舉腿','仰臥抬腿','俄羅斯轉體','滑輪捲腹','伐木式','Pallof抗旋轉推','滾輪','登山者','農夫走路','單邊農夫走路','土耳其起身','藥球砸地','戰繩','雪橇推','雪橇拉','壺鈴抓舉','壺鈴挺舉','波比跳'],
+  '皮拉提斯／活動度': ['Footwork 腳部推蹬','Hundred 百式','Short Spine 短脊椎','Long Stretch 長伸展','Elephant 大象式','Knee Stretch 跪姿推床','Feet in Straps 腳套繩帶','Arms in Straps 手拉繩帶','Mermaid 美人魚','Scooter 滑板車','Side Splits 側向開腿','坐姿脊椎旋轉','脊椎橋式','貓牛式','胸椎旋轉','髖關節活動度','踝關節活動度']
+};
+function trainingExerciseCatalog() {
+  const items=[];const seen=new Set();
+  const add=(name,group)=>{name=String(name||'').trim();if(name&&!seen.has(name)){items.push({name,group});seen.add(name);}};
+  for(const [group,names] of Object.entries(TRAINING_EXERCISE_GROUPS))for(const name of names)add(name,group);
+  for(const name of S.settings.customExerciseNames||[])add(name,'我的動作');
+  for(const student of S.students)for(const x of student.exercises||[])add(x.name,'我的動作');
+  for(const lesson of S.lessons)for(const record of Object.values(lesson.training||{}))for(const x of record.exercises||[])add(x.name,'我的動作');
+  return items;
+}
+function trainingExercisePicker(current,onChoose) {
+  const host=activeDialog;if(!host)return;
+  const catalog=trainingExerciseCatalog();const picker=document.createElement('div');picker.className='cm-exercise-picker';
+  picker.innerHTML=`<section class="cm-picker-card" role="dialog" aria-modal="true" aria-label="選擇訓練動作"><div class="cm-picker-heading"><h3>選擇訓練動作</h3><button type="button" class="btn btn-sm" id="cm-picker-close">關閉</button></div>
+    <input type="search" id="cm-exercise-search" aria-label="搜尋動作" placeholder="搜尋動作，或輸入自訂動作名稱" maxlength="150">
+    <select id="cm-exercise-group" aria-label="動作部位"><option value="">全部部位</option>${[...Object.keys(TRAINING_EXERCISE_GROUPS),'我的動作'].map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join('')}</select>
+    <div id="cm-exercise-options" role="list"></div><button type="button" class="btn btn-primary" id="cm-custom-exercise" hidden>使用自訂動作</button></section>`;
+  host.append(picker);const search=picker.querySelector('#cm-exercise-search');
+  const finish=()=>{picker.remove();};
+  const choose=name=>{finish();onChoose(name);};
+  const update=()=>{
+    const query=search.value.trim().toLocaleLowerCase();const group=picker.querySelector('select').value;
+    const filtered=catalog.filter(x=>(!group||x.group===group)&&(!query||x.name.toLocaleLowerCase().includes(query)));
+    picker.querySelector('#cm-exercise-options').innerHTML=filtered.length?filtered.map(x=>`<button class="cm-exercise-option" type="button" data-exercise-name="${esc(x.name)}" aria-pressed="${x.name===current}"><span>${esc(x.name)}</span><small>${esc(x.group)}</small></button>`).join(''):'<p class="muted">沒有符合的動作，可以使用下方自訂名稱。</p>';
+    const custom=picker.querySelector('#cm-custom-exercise');custom.hidden=!query||catalog.some(x=>x.name.toLocaleLowerCase()===query);custom.textContent='使用自訂動作：'+search.value.trim();
+  };
+  search.oninput=update;picker.querySelector('select').onchange=update;
+  picker.querySelector('#cm-picker-close').onclick=finish;
+  picker.querySelector('#cm-custom-exercise').onclick=()=>{const name=search.value.trim();if(name)choose(name);};
+  picker.addEventListener('click',e=>{if(e.target===picker){finish();return;}const b=e.target.closest('[data-exercise-name]');if(b)choose(b.dataset.exerciseName);});
+  picker.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finish();}},true);
+  update();search.focus();
+}
 function trainingSheet(lesson,studentId) {
   const student=studentById(studentId);if(!student){toast('找不到這位學生');return;}
   const original=lesson.training?.[studentId]||{exercises:[],notes:''};
   let draft=cloneState(original);
   const previous=previousTrainingLesson(lesson,studentId);
-  const bought=+student.totalPurchased||0;const used=consumedSessions(student).count;
+  const contract=trainingContractProgress(student);const {bought,used}=contract;
   let changed=false;
-  const markup=x=>`<tr class="cm-exercise"><td><input aria-label="動作" data-f="name" maxlength="150" value="${esc(x.name||'')}"></td>
+  const markup=x=>`<tr class="cm-exercise"><td><button type="button" class="cm-exercise-select" data-select-exercise aria-haspopup="dialog">${esc(x.name||'選擇動作')} ▾</button><input type="hidden" data-f="name" value="${esc(x.name||'')}"></td>
     <td><input aria-label="重量" type="number" min="0" step="0.1" data-f="weight" value="${esc(String(x.weight??0))}">
     <select aria-label="重量單位" data-f="unit"><option value="kg" ${x.unit!=='lb'?'selected':''}>kg</option><option value="lb" ${x.unit==='lb'?'selected':''}>lb</option></select></td>
     <td><input aria-label="次數" type="number" min="1" step="1" data-f="reps" value="${esc(String(x.reps??10))}"></td>
     <td><input aria-label="組數" type="number" min="1" step="1" data-f="sets" value="${esc(String(x.sets??3))}"></td>
     <td><button class="btn btn-sm" type="button" aria-label="移除此動作" data-remove-exercise>×</button></td></tr>`;
   openSheet({title:student.name+'｜'+lesson.date.slice(5).replace('-','/')+' '+lesson.start,body:`
-    <div class="cm-session-summary"><strong>${esc(String(bought))}－${esc(String(used))}</strong><span>累計購買 ${esc(String(bought))} 堂・已上 ${esc(String(used))} 堂</span></div>
+    <div class="cm-session-summary"><strong>${esc(String(bought))}－${esc(String(used))}</strong><span>本期合約 ${esc(String(bought))} 堂・本期已上 ${esc(String(used))} 堂</span></div>
+    ${contract.main?`<p class="hint">本期合約日期：${esc(contract.main.date||'未填寫')}${contract.carry||contract.addOn?`；另有${contract.carry?'結轉 '+contract.carry+' 堂':''}${contract.carry&&contract.addOn?'、':''}${contract.addOn?'加購 '+contract.addOn+' 堂':''}。進度按先用結轉、再主約、最後加購計算。`:''}</p>`:''}
     <label class="cm-course-picker">這堂課<select id="cm-training-course">${trainingLessons(studentId).map(l=>`<option value="${esc(l.id)}" ${l.id===lesson.id?'selected':''}>${esc(l.date)} ${esc(l.start)}${l.status==='cancelled'?'（已取消）':l.status==='absent'?'（缺席）':''}</option>`).join('')}</select></label>
     ${trainingReferenceMarkup(previous,studentId)}
     <h3>這堂訓練內容</h3>
@@ -11664,7 +11726,11 @@ function trainingSheet(lesson,studentId) {
         if((list.children.length||root.querySelector('textarea').value)&&!confirm('帶入上次內容會取代目前尚未儲存的動作與備註，確定？'))return;
         draft=cloneState(previous.training[studentId]);list.innerHTML=draft.exercises.map(markup).join('');root.querySelector('textarea').value=draft.notes||'';changed=true;
       };
-      root.addEventListener('click',e=>{const b=e.target.closest('[data-remove-exercise]');if(b){b.closest('.cm-exercise').remove();changed=true;}});
+      root.addEventListener('click',e=>{
+        const select=e.target.closest('[data-select-exercise]');
+        if(select){const row=select.closest('.cm-exercise');const input=row.querySelector('[data-f="name"]');trainingExercisePicker(input.value,name=>{input.value=name;select.textContent=name+' ▾';changed=true;});return;}
+        const b=e.target.closest('[data-remove-exercise]');if(b){b.closest('.cm-exercise').remove();changed=true;}
+      });
     },onConfirm:f=>{
       if(!f.reportValidity())return false;
       const exercises=[...f.querySelectorAll('.cm-exercise')].map(row=>{
@@ -11673,6 +11739,7 @@ function trainingSheet(lesson,studentId) {
       });
       if(exercises.some(x=>!x.name||!Number.isFinite(x.weight)||x.weight<0||!Number.isInteger(x.reps)||x.reps<1||!Number.isInteger(x.sets)||x.sets<1)){toast('請填寫動作名稱、有效重量及正整數次數／組數');return false;}
       lesson.training={...(lesson.training||{}),[studentId]:{exercises,notes:f.querySelector('textarea').value.trim(),updatedAt:new Date().toISOString()}};
+      S.settings.customExerciseNames=[...new Set([...(S.settings.customExerciseNames||[]),...exercises.map(x=>x.name)])];
       save();render();toast('已記錄，請查看上方雲端同步狀態');
     }});
 }
