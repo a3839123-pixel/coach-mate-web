@@ -1064,7 +1064,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-25 · cloud-6";
+const BUILD = "2026-10-25 · cloud-7";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -11655,14 +11655,42 @@ function trainingHub() {
   openSheet({title:'學生訓練歷史',body:`<label>選擇學生<select id="cm-pick-student">${S.students.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>`,
     confirmLabel:'查看紀錄',onConfirm:f=>{const student=studentById(f.querySelector('select').value);if(student){trainingHistory(student);return false;}toast('請先新增學生');return false;}});
 }
-// 主約堂數採先用完上期結轉、再用主約、最後使用加購；不加入歷年已上課程。
-function trainingContractProgress(student) {
-  const bought=Math.max(0,+currentPackageSessions(student)||0);
-  const carry=Math.max(0,+carryOverOf(student)||0);
-  const addOn=Math.max(0,+addOnSessions(student)||0);
-  const remaining=Math.max(0,+student.remaining||0);
-  const used=Math.min(bought,Math.max(0,bought+addOn-remaining));
-  return {bought,used,carry,addOn,main:currentPackageParts(student).main};
+// 以「所選課程」為截止點回推該份主約進度，不能把今天餘額直接印在所有舊課上。
+// 歷史一期以「下一期結轉」作期末餘額；目前一期才使用目前 remaining。
+function trainingContractProgress(student,selectedLesson=null) {
+  const nonnegative=n=>Math.max(0,+n||0);
+  const records=renewalsOf(student).slice().reverse();
+  const mains=records.filter(r=>!r.addOn);
+  const selectedDate=selectedLesson?.date||'9999-12-31';
+  const cutoff=selectedDate+' '+(selectedLesson?.start||'23:59');
+  let index=-1;
+  for(let i=0;i<mains.length;i++)if((mains[i].date||'')<=selectedDate)index=i;
+  const main=index>=0?mains[index]:null;
+  const next=mains[index+1]||null;
+  const start=main?.date||'';const end=next?.date||'9999-12-31';
+  // 有些舊帳只記後來的續約，首份購買仍在 totalPurchased；只使用未列入紀錄的差額。
+  const implicitInitial=nonnegative(nonnegative(student.totalPurchased)-records.reduce((n,r)=>n+nonnegative(r.sessions),0));
+  const bought=main?nonnegative(main.sessions):implicitInitial;
+  const carry=main?nonnegative(main.carryOver):0;
+  const additions=records.filter(r=>r.addOn&&(r.mainId?!!main&&r.mainId===main.id:(r.date||'')>=start&&(r.date||'')<end));
+  const addOn=additions.reduce((n,r)=>n+nonnegative(r.sessions),0);
+  const remaining=next?nonnegative(next.carryOver):nonnegative(student.remaining);
+  const capacity=bought+carry+addOn;
+  const finalSpent=Math.max(0,capacity-remaining);
+  const attendance=lessonsOf(student.id).filter(l=>!isAssessment(l)&&CONSUMING.includes(l.status)
+    &&l.date>=start&&l.date<end);
+  const units=l=>{
+    const partner=l.studentId!==student.id;
+    const consumedKey=partner?'partnerConsumed':'consumed';
+    const unitsKey=partner?'partnerConsumedUnits':'consumedUnits';
+    // 保留實際扣除量；補登歷史沒有扣款旗標時仍按其已上課紀錄計堂。
+    return l[consumedKey]?deductedOf(l,consumedKey,unitsKey):unitsOf(l);
+  };
+  const later=attendance.filter(l=>(l.date+' '+l.start)>cutoff).reduce((n,l)=>n+units(l),0);
+  const recorded=attendance.reduce((n,l)=>n+units(l),0);
+  const spentAtCutoff=Math.max(0,finalSpent-later);
+  const used=Math.min(bought,Math.max(0,spentAtCutoff-carry));
+  return {bought,used,carry,addOn,main,estimated:Math.abs(finalSpent-recorded)>0.0001};
 }
 const TRAINING_EXERCISE_GROUPS = {
   '腿部／臀部': ['深蹲','徒手深蹲','槓鈴背蹲','槓鈴前蹲','高腳杯深蹲','箱式深蹲','史密斯深蹲','相撲深蹲','哈克深蹲','腿推','單腳腿推','弓箭步','後跨弓箭步','行走弓箭步','側弓箭步','保加利亞分腿蹲','分腿蹲','登階','單腳蹲','硬舉','羅馬尼亞硬舉','相撲硬舉','六角槓硬舉','單腳羅馬尼亞硬舉','早安式','臀推','槓鈴臀推','單腳臀推','臀橋','單腳臀橋','腿屈伸','坐姿腿彎舉','俯臥腿彎舉','北歐腿彎舉','髖外展','髖內收','滑輪後踢腿','彈力帶側走','蚌殼式','站姿提踵','坐姿提踵','單腳提踵','壺鈴擺盪'],
@@ -11710,7 +11738,7 @@ function trainingSheet(lesson,studentId) {
   const original=lesson.training?.[studentId]||{exercises:[],notes:''};
   let draft=cloneState(original);
   const previous=previousTrainingLesson(lesson,studentId);
-  const contract=trainingContractProgress(student);const {bought,used}=contract;
+  const contract=trainingContractProgress(student,lesson);const {bought,used}=contract;
   let changed=false;
   const markup=x=>`<tr class="cm-exercise"><td><button type="button" class="cm-exercise-select" data-select-exercise aria-haspopup="dialog">${esc(x.name||'選擇動作')} ▾</button><input type="hidden" data-f="name" value="${esc(x.name||'')}"></td>
     <td><div class="cm-weight-control"><input aria-label="重量" type="number" min="0" step="0.1" data-f="weight" value="${esc(String(x.weight??0))}">
