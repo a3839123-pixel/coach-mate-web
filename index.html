@@ -30,6 +30,23 @@ body {padding-top:56px;}
 .cm-exercise,.cm-history {padding:12px;margin:12px 0;border:1px solid var(--line,#ccd2dc);border-radius:12px;}
 .cm-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
 .cm-grid input,.cm-grid select {width:100%;min-width:0;}
+.cm-session-summary {display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:14px;}
+.cm-session-summary strong {font-size:24px;color:var(--accent);}
+.cm-session-summary span {font-size:13px;color:var(--muted);}
+.cm-course-picker {display:block;margin-bottom:18px;}
+.cm-previous {padding:14px;margin:16px 0 22px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);}
+.cm-previous h3 {font-size:15px;margin:0 0 6px;}
+.cm-previous p {margin:6px 0 10px;font-size:13px;}
+.cm-reference-notes {white-space:pre-wrap;overflow-wrap:anywhere;}
+.cm-training-table-wrap {width:100%;overflow-x:auto;}
+.cm-training-table {width:100%;border-collapse:collapse;font-size:13px;}
+.cm-training-table th,.cm-training-table td {text-align:left;vertical-align:top;padding:8px 5px;border-bottom:1px solid var(--line);overflow-wrap:anywhere;}
+.cm-training-table th {font-weight:600;color:var(--muted);}
+.cm-edit-training {table-layout:fixed;min-width:310px;}
+.cm-training-table input,.cm-training-table select {min-width:0;width:100%;padding:8px 5px;}
+.cm-training-table select {margin-top:5px;}
+.cm-training-table .cm-exercise {border:0;}
+.cm-training-table .btn {padding:7px;min-width:26px;}
 @media(max-width:420px){#cm-bar {gap:4px;padding:5px 7px;}#cm-bar .btn{font-size:11px;padding:6px;} .cm-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 </style>
 </head>
@@ -1030,7 +1047,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-24 · cloud-1";
+const BUILD = "2026-10-25 · cloud-2";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -3264,7 +3281,7 @@ function applyTheme() {
 
 let activeDialog = null;
 
-function openSheet({ title, body, confirmLabel = "儲存", closeLabel = "取消", onConfirm, extraFoot = "", onMount }) {
+function openSheet({ title, body, confirmLabel = "儲存", closeLabel = "取消", onConfirm, extraFoot = "", onMount, autoFocus = true }) {
   closeSheet();
   const scrim = document.createElement("div");
   scrim.className = "scrim";
@@ -3300,7 +3317,7 @@ function openSheet({ title, body, confirmLabel = "儲存", closeLabel = "取消"
   // 自動聚焦會直接彈出鍵盤、看起來像逼人改名字。
   const first = scrim.querySelector(
     "#sheet-form input:not([type=hidden]):not([type=checkbox]):not([type=radio]), #sheet-form textarea");
-  if (first && !first.value) first.focus();
+  if (autoFocus && first && !first.value) first.focus();
 }
 
 function closeSheet() {
@@ -10558,7 +10575,7 @@ document.addEventListener("click", (e) => {
       render();
       break;
     case "new-student": studentSheet(null); break;
-    case "view-student": studentDetailSheet(studentById(id)); break;
+    case "view-student": studentTrainingEntry(studentById(id)); break;
     case "edit-student": studentSheet(studentById(id)); break;
     case "renew": renewSheet(studentById(id)); break;
     // 單堂制那一列的「記收費」：直接把收費表單開在這位學生身上。
@@ -11565,6 +11582,38 @@ function cloudAccount() {
 function trainingLessons(studentId) {
   return lessonsOf(studentId).filter(l=>!isAssessment(l)).sort((a,b)=>(b.date+' '+b.start).localeCompare(a.date+' '+a.start));
 }
+function trainingDefaultLesson(studentId) {
+  const list=trainingLessons(studentId).filter(l=>l.status!=='cancelled'&&l.status!=='absent');
+  const now=new Date();const day=today();const minute=now.getHours()*60+now.getMinutes();
+  // 優先今天尚未結束／下一堂預約；沒有預約時回到最近一堂。
+  return list.slice().reverse().find(l=>l.status==='scheduled'&&(l.date>day||(l.date===day&&minutesOf(l.end||l.start)>=minute)))
+    ||list.find(l=>l.date<=day)||list[list.length-1]||null;
+}
+function studentTrainingEntry(student) {
+  if(!student){toast('找不到這位學生');return;}
+  const lesson=trainingDefaultLesson(student.id);
+  if(lesson){trainingSheet(lesson,student.id);return;}
+  openSheet({title:student.name+'｜訓練紀錄',body:'<p>這位學生還沒有可填寫的課程，請先排課。</p>',
+    extraFoot:'<button type="button" class="btn" id="cm-empty-student-detail">學生資料</button>',
+    confirmLabel:'替這位學生排課',onConfirm:()=>{lessonSheet(null,'lesson',student.id);return false;},
+    onMount:root=>root.querySelector('#cm-empty-student-detail').onclick=()=>studentDetailSheet(student)});
+}
+function previousTrainingLesson(lesson,studentId) {
+  const now=new Date();const day=today();const time=now.getHours()*60+now.getMinutes();
+  return trainingLessons(studentId).find(l=>l.id!==lesson.id&&l.status!=='cancelled'&&l.status!=='absent'
+    &&(l.date+' '+l.start)<(lesson.date+' '+lesson.start)
+    &&(l.date<day||(l.date===day&&minutesOf(l.start)<=time))&&l.training?.[studentId]);
+}
+function trainingReferenceMarkup(previous,studentId) {
+  if(!previous)return '<section class="cm-previous" id="cm-previous"><h3>上次訓練內容</h3><p class="muted">尚無上次訓練紀錄</p></section>';
+  const record=previous.training[studentId];
+  return `<section class="cm-previous" id="cm-previous"><h3>上次訓練內容</h3>
+    <p>${esc(previous.date)} ${esc(previous.start)}</p>
+    ${(record.exercises||[]).length?`<div class="cm-training-table-wrap"><table class="cm-training-table"><thead><tr><th>動作</th><th>重量</th><th>次數</th><th>組數</th></tr></thead><tbody>
+      ${record.exercises.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(weightText(x.weight,x.unit))}</td><td>${esc(String(x.reps))}</td><td>${esc(String(x.sets))}</td></tr>`).join('')}
+      </tbody></table></div>`:'<p class="muted">未填寫動作</p>'}
+    ${record.notes?`<p class="cm-reference-notes">備註：${esc(record.notes)}</p>`:''}</section>`;
+}
 function trainingHistory(student) {
   openSheet({title:student.name+'｜每堂訓練紀錄',body:
     trainingLessons(student.id).map(l=>{const r=l.training?.[student.id];return `<div class="cm-history"><strong>${esc(l.date)} ${esc(l.start)}</strong>
@@ -11580,27 +11629,42 @@ function trainingSheet(lesson,studentId) {
   const student=studentById(studentId);if(!student){toast('找不到這位學生');return;}
   const original=lesson.training?.[studentId]||{exercises:[],notes:''};
   let draft=cloneState(original);
-  const previous=trainingLessons(studentId).find(l=> (l.date+' '+l.start)<(lesson.date+' '+lesson.start)&&l.training?.[studentId]);
-  const markup=x=>`<div class="cm-exercise"><label>動作<input data-f="name" maxlength="150" value="${esc(x.name||'')}"></label>
-    <div class="cm-grid"><label>重量<input type="number" min="0" step="0.1" data-f="weight" value="${esc(String(x.weight??0))}"></label>
-    <label>單位<select data-f="unit"><option value="kg" ${x.unit!=='lb'?'selected':''}>kg</option><option value="lb" ${x.unit==='lb'?'selected':''}>lb</option></select></label>
-    <label>次數<input type="number" min="1" step="1" data-f="reps" value="${esc(String(x.reps??10))}"></label>
-    <label>組數<input type="number" min="1" step="1" data-f="sets" value="${esc(String(x.sets??3))}"></label></div>
-    <button class="btn btn-sm" type="button" data-remove-exercise>移除此動作</button></div>`;
-  openSheet({title:student.name+'｜'+lesson.date+' '+lesson.start,body:`<p>本紀錄只屬於這堂課與這位學生。填寫不會改動堂數或上課狀態。</p>
+  const previous=previousTrainingLesson(lesson,studentId);
+  const bought=+student.totalPurchased||0;const used=consumedSessions(student).count;
+  let changed=false;
+  const markup=x=>`<tr class="cm-exercise"><td><input aria-label="動作" data-f="name" maxlength="150" value="${esc(x.name||'')}"></td>
+    <td><input aria-label="重量" type="number" min="0" step="0.1" data-f="weight" value="${esc(String(x.weight??0))}">
+    <select aria-label="重量單位" data-f="unit"><option value="kg" ${x.unit!=='lb'?'selected':''}>kg</option><option value="lb" ${x.unit==='lb'?'selected':''}>lb</option></select></td>
+    <td><input aria-label="次數" type="number" min="1" step="1" data-f="reps" value="${esc(String(x.reps??10))}"></td>
+    <td><input aria-label="組數" type="number" min="1" step="1" data-f="sets" value="${esc(String(x.sets??3))}"></td>
+    <td><button class="btn btn-sm" type="button" aria-label="移除此動作" data-remove-exercise>×</button></td></tr>`;
+  openSheet({title:student.name+'｜'+lesson.date.slice(5).replace('-','/')+' '+lesson.start,body:`
+    <div class="cm-session-summary"><strong>${esc(String(bought))}－${esc(String(used))}</strong><span>累計購買 ${esc(String(bought))} 堂・已上 ${esc(String(used))} 堂</span></div>
+    <label class="cm-course-picker">這堂課<select id="cm-training-course">${trainingLessons(studentId).map(l=>`<option value="${esc(l.id)}" ${l.id===lesson.id?'selected':''}>${esc(l.date)} ${esc(l.start)}${l.status==='cancelled'?'（已取消）':l.status==='absent'?'（缺席）':''}</option>`).join('')}</select></label>
+    ${trainingReferenceMarkup(previous,studentId)}
+    <h3>這堂訓練內容</h3>
     <div class="cm-actions"><button class="btn" type="button" id="cm-add-exercise">新增動作</button>
     <button class="btn" type="button" id="cm-copy-last" ${previous?'':'disabled'}>帶入上次${previous?'（'+esc(previous.date)+'）':''}</button></div>
-    <div id="cm-exercises">${draft.exercises.map(markup).join('')}</div>
-    <label>當天備註<textarea id="cm-training-notes" maxlength="5000">${esc(draft.notes||'')}</textarea></label>`,
-    confirmLabel:'儲存這堂紀錄',onMount:root=>{
+    <div class="cm-training-table-wrap"><table class="cm-training-table cm-edit-training"><colgroup><col style="width:36%"><col style="width:24%"><col style="width:15%"><col style="width:15%"><col style="width:10%"></colgroup><thead><tr><th>動作</th><th>重量</th><th>次數</th><th>組數</th><th></th></tr></thead><tbody id="cm-exercises">${draft.exercises.map(markup).join('')}</tbody></table></div>
+    <label>當天備註<textarea id="cm-training-notes" maxlength="5000">${esc(draft.notes||'')}</textarea></label>
+    <p class="hint">填寫訓練不會扣堂或更改上課狀態。</p>`,
+    extraFoot:'<button class="btn btn-sm" type="button" id="cm-open-student-detail">學生資料</button>',
+    autoFocus:false,confirmLabel:'儲存這堂紀錄',onMount:root=>{
       const list=root.querySelector('#cm-exercises');
-      root.querySelector('#cm-add-exercise').onclick=()=>list.insertAdjacentHTML('beforeend',markup({}));
+      root.querySelector('#cm-add-exercise').onclick=()=>{list.insertAdjacentHTML('beforeend',markup({}));changed=true;};
+      root.querySelector('#sheet-form').addEventListener('input',e=>{if(e.target.id!=='cm-training-course')changed=true;});
+      const mayLeave=()=>!changed||confirm('這堂紀錄還有未儲存的修改，確定離開？');
+      root.querySelector('#cm-open-student-detail').onclick=()=>{if(mayLeave())studentDetailSheet(student);};
+      root.querySelector('#cm-training-course').onchange=e=>{
+        if(!mayLeave()){e.target.value=lesson.id;return;}
+        const next=S.lessons.find(l=>l.id===e.target.value);if(next)trainingSheet(next,studentId);
+      };
       root.querySelector('#cm-copy-last').onclick=()=>{
         if(!previous)return;
         if((list.children.length||root.querySelector('textarea').value)&&!confirm('帶入上次內容會取代目前尚未儲存的動作與備註，確定？'))return;
-        draft=cloneState(previous.training[studentId]);list.innerHTML=draft.exercises.map(markup).join('');root.querySelector('textarea').value=draft.notes||'';
+        draft=cloneState(previous.training[studentId]);list.innerHTML=draft.exercises.map(markup).join('');root.querySelector('textarea').value=draft.notes||'';changed=true;
       };
-      root.addEventListener('click',e=>{const b=e.target.closest('[data-remove-exercise]');if(b)b.closest('.cm-exercise').remove();});
+      root.addEventListener('click',e=>{const b=e.target.closest('[data-remove-exercise]');if(b){b.closest('.cm-exercise').remove();changed=true;}});
     },onConfirm:f=>{
       if(!f.reportValidity())return false;
       const exercises=[...f.querySelectorAll('.cm-exercise')].map(row=>{
