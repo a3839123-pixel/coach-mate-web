@@ -1076,7 +1076,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-25 · cloud-10";
+const BUILD = "2026-10-25 · cloud-11";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -11991,7 +11991,52 @@ const originalStudentDetail=studentDetailSheet;
 studentDetailSheet=function(student){originalStudentDetail(student);if(!activeDialog)return;
   const b=document.createElement('button');b.type='button';b.className='btn btn-primary btn-sm';b.textContent='每堂訓練歷史';
   b.onclick=()=>trainingHistory(student);activeDialog.querySelector('.sheet-foot').prepend(b);
+  const line=document.createElement('button');line.type='button';line.className='btn btn-sm';line.textContent='學員 LINE 綁定';
+  line.onclick=()=>studentPortalSheet(student);activeDialog.querySelector('.sheet-foot').prepend(line);
 };
+function studentPortalSheet(student) {
+  if(!C.ready||!C.user){toast('請先登入教練帳號');return;}
+  if(C.dirty||C.busy||C.conflict){toast('請先完成雲端同步，再設定學員 LINE 綁定');return;}
+  openSheet({title:student.name+'｜學員 LINE 綁定',body:`<p>學員用 LINE 登入後，可查看自己的課程、剩餘堂數與訓練動作；不顯示備註、收費明細或其他學員資料。</p>
+    <p id="cm-portal-status" role="status">正在確認綁定狀態…</p>
+    <div class="cm-portal-actions"><button class="btn btn-primary" type="button" id="cm-portal-invite" hidden>產生專屬邀請連結</button>
+    <button class="btn" type="button" id="cm-portal-revoke" hidden>解除綁定／取消邀請</button></div>
+    <div id="cm-portal-link" hidden><label>只傳給這位學員<input id="cm-portal-url" readonly aria-label="學員專屬邀請連結"></label>
+    <button class="btn" type="button" id="cm-portal-copy">複製邀請連結</button><p>連結 24 小時內有效、只能綁定一次。重新產生會讓舊邀請失效，請勿轉傳給其他人。</p></div>`,
+    onMount:root=>{
+      const status=root.querySelector('#cm-portal-status'),invite=root.querySelector('#cm-portal-invite'),revoke=root.querySelector('#cm-portal-revoke'),panel=root.querySelector('#cm-portal-link'),url=root.querySelector('#cm-portal-url');
+      let busy=false;
+      const call=async action=>{
+        if(busy)return;busy=true;invite.disabled=revoke.disabled=true;
+        try{
+          const {data,error}=await C.client.rpc('coach_portal_manage',{p_action:action,p_student_id:String(student.id)});
+          if(error)throw error;
+          if(!root.isConnected)return;
+          if(action==='invite'){
+            url.value='https://liff.line.me/2012198067-LSaer2eJ?invite='+encodeURIComponent(data.token);
+            panel.hidden=false;status.textContent='邀請已建立，請私下傳給 '+student.name+'。';
+            invite.textContent='重新產生邀請連結';revoke.hidden=false;
+          }else{
+            panel.hidden=true;url.value='';invite.hidden=!!data.bound;
+            revoke.hidden=!data.bound&&!data.expiresAt;
+            status.textContent=data.bound?'已綁定 LINE，學員可查詢自己的資料。':action==='revoke'?'已解除綁定並取消邀請；學員下次查詢將無法讀取紀錄。':data.expiresAt?'目前未綁定，已有邀請。可重新產生，舊邀請將失效。':'目前尚未綁定 LINE。';
+            invite.textContent='產生專屬邀請連結';
+          }
+        }catch(error){
+          if(!root.isConnected)return;
+          const message=String(error.message||'');
+          status.textContent=message.includes('PORTAL_ALREADY_BOUND')?'已綁定，請關閉後重新開啟查看狀態。':message.includes('PORTAL_STUDENT_NOT_FOUND')?'雲端找不到這位學員，請先完成同步。':'尚未啟用學員綁定服務，或連線失敗。請確認已執行 02-student-portal.sql，再重新開啟。';
+        }finally{busy=false;invite.disabled=revoke.disabled=false;}
+      };
+      invite.onclick=()=>call('invite');
+      revoke.onclick=()=>{if(confirm('解除 '+student.name+' 的 LINE 綁定並取消邀請？已產生的圖片與學員原始紀錄都會保留。'))call('revoke');};
+      root.querySelector('#cm-portal-copy').onclick=async()=>{
+        try{await navigator.clipboard.writeText(url.value);toast('已複製，只傳給這位學員');}
+        catch{url.focus();url.select();toast('請長按連結複製');}
+      };
+      call('status');
+    }});
+}
 // 另附完整內部狀態，以保存穩定 ID、每堂訓練及所有原有欄位。
 const originalBuildBackup=buildBackup;
 buildBackup=function(){return {...originalBuildBackup(),coachCloud:{format:1,state:cloneState(S)}};};

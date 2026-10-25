@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#F3F5F9">
+<meta http-equiv="Cache-Control" content="no-store">
+<title>泰勒教練｜學員專區</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC",sans-serif;color:#16213a;background:#f3f5f9;font-size:16px;color-scheme:light}
+*{box-sizing:border-box}body{margin:0}button,a,input{font:inherit}button{cursor:pointer;border:1px solid #cbd3e0;background:#fff;color:#16213a;border-radius:12px;padding:12px 18px;min-height:46px}button:disabled{opacity:.5;cursor:default}.primary{background:#f5ba00;border-color:#f5ba00;font-weight:700}.line{background:#06c755;color:#fff;border:0;font-weight:700}.muted,small{color:#66738b}.wrap{max-width:780px;margin:auto;padding:24px 16px max(28px,env(safe-area-inset-bottom))}.brand{font-size:14px;font-weight:700;letter-spacing:.08em;color:#283f87}h1{font-size:28px;margin:8px 0 12px}h2{font-size:20px;margin:0 0 16px}h3{font-size:17px;margin:0}.card{background:white;border:1px solid #e4e8ef;border-radius:20px;padding:22px;margin-top:18px}.gate{margin-top:36px;padding:30px 24px}.gate p{line-height:1.8}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.head{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}.summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}.stat{background:#edf1f8;border-radius:14px;padding:18px 14px}.stat strong{display:block;font-size:30px;margin:6px 0}.badge{display:inline-block;color:#283f87;background:#edf1f8;border-radius:8px;padding:5px 8px;font-size:13px}.lesson{border-top:1px solid #e4e8ef;padding:16px 0}.lesson:first-of-type{border-top:0}.lesson:last-child{padding-bottom:0}.slot{margin:8px 0 12px;color:#66738b}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:15px;table-layout:fixed}th,td{padding:12px 5px;border-bottom:1px solid #e4e8ef;text-align:center;overflow-wrap:anywhere}th{color:#66738b;font-size:13px}th:first-child,td:first-child{text-align:left;width:43%}th:nth-child(2){width:25%}td:nth-child(2){font-variant-numeric:tabular-nums}td:last-child,td:nth-last-child(2){width:16%}.empty{color:#66738b;font-size:14px;margin:12px 0;line-height:1.7}.pager{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:20px}.pager button{padding:10px}.notice{line-height:1.7;font-size:14px}.foot{font-size:12px;color:#66738b;text-align:center;margin:24px 0}#status{font-size:14px;line-height:1.7;margin:14px 0;min-height:24px}a{color:#283f87}input{width:100%;padding:12px;border-radius:10px;border:1px solid #cbd3e0}button:focus-visible,a:focus-visible{outline:3px solid #839bd7;outline-offset:3px}@media(max-width:360px){.wrap{padding:18px 12px}.card{padding:18px 14px}td,th{padding:10px 3px;font-size:14px}.stat strong{font-size:26px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="brand">泰勒 Taylor 教練</div>
+  <div class="head"><h1>學員專區</h1><button id="refresh" hidden>重新整理</button></div>
+  <p class="muted">你的課程與每一次進步，都在這裡。</p>
+  <div id="status" role="status" aria-live="polite">正在連接 LINE 登入服務…</div>
+  <div id="content"></div>
+  <p class="foot">本頁提供個人紀錄查詢。排課或資料問題，請聯絡泰勒教練。</p>
+</main>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+'use strict';
+const LIFF_ID='2012198067-LSaer2eJ';
+const API='https://mjkqnjfqhsnugwjgflwx.supabase.co/functions/v1/line-student-api';
+const PUBLIC_KEY='sb_publishable_To2DKUsx0-fDjCHGqMivUQ_kLH5QXHq';
+const INVITE_KEY='coach-portal-invite-v1';
+const content=document.querySelector('#content'),status=document.querySelector('#status'),refresh=document.querySelector('#refresh');
+let invite='',currentPage=0,ticket=0,ready=false;
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function captureInvite(){
+  const params=new URLSearchParams(location.search);
+  const nested=new URLSearchParams((params.get('liff.state')||'').replace(/^\?/,''));
+  const candidate=params.get('invite')||nested.get('invite');
+  try{
+    if(candidate&&/^[a-f0-9]{64}$/.test(candidate))sessionStorage.setItem(INVITE_KEY,candidate);
+    invite=sessionStorage.getItem(INVITE_KEY)||'';
+  }catch{if(candidate&&/^[a-f0-9]{64}$/.test(candidate))invite=candidate;}
+}
+function clearInvite(){invite='';try{sessionStorage.removeItem(INVITE_KEY);}catch{}history.replaceState(null,'',location.pathname);}
+function gate(title,message,button,handler){
+  refresh.hidden=true;
+  content.innerHTML=`<section class="card gate"><h2>${esc(title)}</h2><p>${esc(message)}</p>${button?`<button class="line" id="gate-action">${esc(button)}</button>`:''}</section>`;
+  if(button)content.querySelector('#gate-action').onclick=handler;
+}
+function login(){
+  const redirect=new URL(location.pathname,location.origin);
+  if(invite)redirect.searchParams.set('invite',invite);
+  if(liff.isLoggedIn())liff.logout();
+  liff.login({redirectUri:redirect.href});
+}
+function errorGate(code){
+  const messages={PORTAL_UNBOUND:['尚未綁定學員資料','請向教練索取你的專屬邀請連結，再從該連結登入。'],
+    PORTAL_INVALID_INVITE:['邀請連結無法使用','連結可能已過期、使用過或被取消，請教練重新產生邀請連結。'],
+    PORTAL_ALREADY_BOUND:['這個 LINE 已綁定其他學員','如需更換綁定，請先聯絡教練解除原本的綁定。'],
+    PORTAL_LOGIN_REQUIRED:['請重新登入 LINE','登入已逾時或尚未完成授權，請重新登入。'],
+    PORTAL_SERVER_ERROR:['暫時無法取得紀錄','服務可能尚未啟用或網路暫時中斷，請稍後重試，或聯絡教練。']};
+  const [title,message]=messages[code]||messages.PORTAL_SERVER_ERROR;
+  if(code==='PORTAL_UNBOUND'&&invite){
+    gate('連結你的學員資料','請確認這是教練專門傳給你的邀請連結。綁定後，這個 LINE 帳號將能查詢對應學員的紀錄。請勿轉傳連結。','確認綁定我的資料',()=>load('claim'));
+  }else if(code==='PORTAL_LOGIN_REQUIRED')gate(title,message,'重新登入',login);
+  else gate(title,message,'重新整理',()=>load());
+}
+function exerciseTable(rows){
+  if(!rows.length)return '<p class="empty">教練尚未填寫這堂訓練內容。</p>';
+  return `<div class="table-wrap"><table><thead><tr><th>動作</th><th>重量</th><th>次數</th><th>組數</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.weight===0?'徒手':x.weight+' '+x.unit)}</td><td>${esc(x.reps)}</td><td>${esc(x.sets)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function render(data){
+  currentPage=data.page;
+  content.innerHTML=`<section class="card"><h2>${esc(data.name)}，你好</h2>
+    <div class="summary"><div class="stat">目前剩餘<strong>${esc(data.remaining)} <small>堂</small></strong></div><div class="stat">本期合約進度<strong>${esc(data.bought)}－${esc(data.used)}</strong><small>購買堂數－已上堂數</small></div></div></section>
+    <section class="card"><h2>接下來的課程</h2>${data.upcoming.length?data.upcoming.map(l=>`<div class="lesson"><strong>${esc(l.date)}</strong><p class="slot">${esc(l.start)}–${esc(l.end)}</p><span class="badge">${esc(l.status)}</span></div>`).join(''):'<p class="empty">目前沒有接下來的預約。</p>'}</section>
+    <section class="card"><h2>上課與訓練紀錄</h2>${data.history.length?data.history.map(l=>`<article class="lesson"><div class="head"><h3>${esc(l.date)}</h3><span class="badge">${esc(l.bought)}－${esc(l.used)}</span></div><p class="slot">${esc(l.start)}–${esc(l.end)} · ${esc(l.status)}</p>${exerciseTable(l.exercises)}</article>`).join(''):'<p class="empty">目前沒有過往上課紀錄。</p>'}
+    ${data.pages>1?`<div class="pager"><button id="prev" ${data.page===0?'disabled':''}>較新的紀錄</button><small>${data.page+1} / ${data.pages}</small><button id="next" ${data.page>=data.pages-1?'disabled':''}>較早的紀錄</button></div>`:''}</section>
+    <p class="notice muted">堂數與紀錄以教練同步的資料為準；若過往紀錄未完整補登，歷史合約進度可能有差異。</p><button id="logout">登出 LINE 學員專區</button>`;
+  content.querySelector('#prev')?.addEventListener('click',()=>load('read',currentPage-1));
+  content.querySelector('#next')?.addEventListener('click',()=>load('read',currentPage+1));
+  content.querySelector('#logout').onclick=()=>{ticket++;liff.logout();clearInvite();status.textContent='已登出';gate('歡迎回來','用 LINE 登入，查看自己的上課與訓練紀錄。','用 LINE 登入',login);};
+  refresh.hidden=false;status.textContent='已取得教練最新同步的紀錄';
+}
+async function load(action='read',page=0){
+  if(!ready)return;
+  const thisTicket=++ticket;content.innerHTML='';refresh.disabled=true;status.textContent=action==='claim'?'正在綁定…':'正在讀取你的紀錄…';
+  try{
+    const idToken=liff.getIDToken();if(!idToken){errorGate('PORTAL_LOGIN_REQUIRED');return;}
+    const response=await fetch(API,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','apikey':PUBLIC_KEY},
+      body:JSON.stringify({action,idToken,page,...(action==='claim'?{invite}:{})}),signal:AbortSignal.timeout(20000)});
+    const data=await response.json();if(thisTicket!==ticket)return;
+    if(!response.ok){status.textContent='';errorGate(data.code);return;}
+    clearInvite();render(data);
+  }catch{if(thisTicket===ticket){status.textContent='';errorGate('PORTAL_SERVER_ERROR');}}
+  finally{if(thisTicket===ticket)refresh.disabled=false;}
+}
+refresh.onclick=()=>load('read',currentPage);
+async function init(){
+  captureInvite();
+  try{
+    if(!window.liff)throw Error('SDK');
+    await liff.init({liffId:LIFF_ID});captureInvite();ready=true;
+    // init 必須先處理 LINE 回傳參數，之後才可清掉邀請碼，避免干擾登入導向。
+    if(!new URLSearchParams(location.search).has('liff.state'))history.replaceState(null,'',location.pathname);
+    if(!liff.isLoggedIn()){status.textContent='';gate('歡迎來到學員專區','用 LINE 登入，查看自己的課程、剩餘堂數與訓練內容。','用 LINE 登入',login);}
+    else await load();
+  }catch{status.textContent='';gate('LINE 登入服務暫時無法載入','請確認網路，並從教練提供的 LINE 連結重新開啟。','重試',()=>location.reload());}
+}
+window.addEventListener('pageshow',e=>{if(e.persisted&&ready)load('read',currentPage);});
+init();
+</script>
+</body>
+</html>
