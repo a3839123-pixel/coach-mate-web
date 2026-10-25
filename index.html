@@ -45,9 +45,13 @@ body {padding-top:56px;}
 .cm-edit-training {table-layout:fixed;min-width:310px;}
 .cm-training-table input,.cm-training-table select {min-width:0;width:100%;padding:8px 5px;}
 .cm-training-table select {margin-top:5px;}
-.cm-weight-control {display:flex;align-items:center;gap:4px;}
-.cm-weight-control input {flex:1;min-width:0;width:0;}
-.cm-weight-control select {flex:0 0 40px;width:40px;min-width:0;margin:0;padding:8px 2px;font-size:12px;text-align:center;appearance:none;}
+.cm-edit-training .cm-weight-control {display:flex;align-items:center;gap:0;min-width:0;border:1px solid var(--line-2);border-radius:var(--r-in);background:var(--surface);overflow:hidden;}
+.cm-edit-training input[type="number"] {padding:8px 2px;font-size:16px;line-height:1.4;appearance:textfield;font-variant-numeric:tabular-nums;}
+.cm-edit-training input[type="number"]::-webkit-inner-spin-button,.cm-edit-training input[type="number"]::-webkit-outer-spin-button {appearance:none;-webkit-appearance:none;margin:0;}
+.cm-edit-training .cm-weight-control input {flex:1 1 0;min-width:0;width:0;border:0;border-radius:0;box-shadow:none;}
+.cm-edit-training .cm-weight-control select {flex:0 0 28px;width:28px;min-width:0;margin:0;padding:8px 2px;border:0;border-radius:0;background:transparent;font-size:12px;text-align:center;appearance:none;box-shadow:none;}
+.cm-edit-training th:last-child,.cm-edit-training td:last-child {padding-left:1px;padding-right:1px;}
+@media(max-width:480px){.cm-edit-training th,.cm-edit-training td {padding-left:3px;padding-right:3px;}.cm-edit-training th:last-child,.cm-edit-training td:last-child {padding-left:1px;padding-right:1px;}}
 .cm-training-table .cm-exercise {border:0;}
 .cm-training-table .btn {padding:7px;min-width:26px;}
 .cm-exercise-select {width:100%;min-height:38px;text-align:left;padding:8px 5px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;overflow-wrap:anywhere;}
@@ -1064,7 +1068,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-25 · cloud-7";
+const BUILD = "2026-10-25 · cloud-8";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -11750,7 +11754,7 @@ function trainingSheet(lesson,studentId) {
     <h3>這堂訓練內容</h3>
     <div class="cm-actions"><button class="btn" type="button" id="cm-add-exercise">新增動作</button>
     <button class="btn" type="button" id="cm-copy-last" ${previous?'':'disabled'}>帶入上次${previous?'（'+esc(previous.date)+'）':''}</button></div>
-    <div class="cm-training-table-wrap"><table class="cm-training-table cm-edit-training"><colgroup><col style="width:36%"><col style="width:24%"><col style="width:15%"><col style="width:15%"><col style="width:10%"></colgroup><thead><tr><th>動作</th><th>重量</th><th>次數</th><th>組數</th><th></th></tr></thead><tbody id="cm-exercises">${draft.exercises.map(markup).join('')}</tbody></table></div>
+    <div class="cm-training-table-wrap"><table class="cm-training-table cm-edit-training"><colgroup><col style="width:31%"><col style="width:32%"><col style="width:14%"><col style="width:14%"><col style="width:9%"></colgroup><thead><tr><th>動作</th><th>重量</th><th>次數</th><th>組數</th><th></th></tr></thead><tbody id="cm-exercises">${draft.exercises.map(markup).join('')}</tbody></table></div>
     <label>當天備註<textarea id="cm-training-notes" maxlength="5000">${esc(draft.notes||'')}</textarea></label>
     <label class="cm-course-picker">這堂課<select id="cm-training-course">${trainingLessons(studentId).map(l=>`<option value="${esc(l.id)}" ${l.id===lesson.id?'selected':''}>${esc(l.date)} ${esc(l.start)}${l.status==='cancelled'?'（已取消）':l.status==='absent'?'（缺席）':''}</option>`).join('')}</select></label>
     ${trainingReferenceMarkup(previous,studentId)}
