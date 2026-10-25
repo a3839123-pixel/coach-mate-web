@@ -63,6 +63,14 @@ body {padding-top:56px;}
 .cm-picker-heading {display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;}
 .cm-picker-heading h3 {margin:0;}
 .cm-picker-card input,.cm-picker-card select {display:block;width:100%;margin-bottom:10px;}
+.cm-line-share #cm-line-preview {width:100%;min-height:230px;font-size:15px;line-height:1.7;resize:vertical;}
+.cm-line-share .cm-line-notes {display:flex;align-items:center;gap:8px;margin:12px 0;}
+.cm-line-share .cm-line-notes input {display:inline-block;width:18px;height:18px;margin:0;flex:none;}
+.cm-line-share .cm-actions a {text-decoration:none;white-space:normal;}
+.cm-image-preview img {display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:12px;margin-top:16px;}
+.cm-image-preview .cm-line-notes {display:flex;align-items:center;gap:8px;margin:12px 0;}
+.cm-image-preview .cm-line-notes input {display:inline-block;width:18px;height:18px;margin:0;flex:none;}
+.cm-image-preview .cm-actions a {text-decoration:none;}
 #cm-exercise-options {max-height:43vh;overflow:auto;overscroll-behavior:contain;}
 .cm-exercise-option {display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;padding:12px 8px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);text-align:left;font:inherit;cursor:pointer;}
 .cm-exercise-option small {font-size:11px;color:var(--muted);white-space:nowrap;}
@@ -1068,7 +1076,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-10-25 · cloud-8";
+const BUILD = "2026-10-25 · cloud-10";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -1098,6 +1106,8 @@ const GUIDE_MD = `
 ## 每堂訓練
 
 在課表點學員姓名，可直接編輯該日期與時段的訓練；一對二可分別點兩位姓名。也可以從上方「訓練紀錄」選學生與課程。動作可搜尋選取，重量、次數與組數自行填寫。「上次訓練內容」位於當天備註下方；「帶入上次」複製後修改不影響原紀錄。
+
+點「產生圖片」可預覽本堂訓練圖片，勾選是否包含備註，再按「分享／儲存圖片」或下載。要加入LINE相簿，請先儲存圖片，再到學生聊天室的相簿新增；較長內容會完整分頁。
 
 ## 同步
 
@@ -11737,6 +11747,173 @@ function trainingExercisePicker(current,onChoose) {
   picker.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finish();}},true);
   update();search.focus();
 }
+function readTrainingForm(form) {
+  if(!form.reportValidity())return null;
+  const exercises=[...form.querySelectorAll('.cm-exercise')].map(row=>{
+    const value=key=>row.querySelector(`[data-f="${key}"]`).value;
+    return {name:value('name').trim(),weight:Number(value('weight')),unit:value('unit'),reps:Number(value('reps')),sets:Number(value('sets'))};
+  });
+  if(exercises.some(x=>!x.name||!Number.isFinite(x.weight)||x.weight<0||!Number.isInteger(x.reps)||x.reps<1||!Number.isInteger(x.sets)||x.sets<1)){
+    toast('請填寫動作名稱、有效重量及正整數次數／組數');return null;
+  }
+  return {exercises,notes:form.querySelector('#cm-training-notes').value.trim()};
+}
+function storeTrainingRecord(lesson,studentId,draft) {
+  const record={...cloneState(draft),updatedAt:new Date().toISOString()};
+  lesson.training={...(lesson.training||{}),[studentId]:record};
+  S.settings.customExerciseNames=[...new Set([...(S.settings.customExerciseNames||[]),...record.exercises.map(x=>x.name)])];
+  save();return record;
+}
+function buildTrainingShareText(student,lesson,record,{includeNotes=false}={}) {
+  const {bought,used}=trainingContractProgress(student,lesson);
+  const lines=['訓練紀錄','學員：'+student.name,'日期：'+lesson.date.replaceAll('-','/')+' '+lesson.start+(lesson.end?'–'+lesson.end:'')];
+  if(bought>0)lines.push('本期進度：'+used+'／'+bought+' 堂');
+  lines.push('',...record.exercises.map((x,i)=>`${i+1}. ${x.name}｜${weightText(x.weight,x.unit)} × ${x.reps} 次 × ${x.sets} 組`));
+  if(includeNotes&&record.notes)lines.push('','當天備註：',record.notes);
+  return lines.join('\n');
+}
+function trainingLineShare(student,lesson,record) {
+  const host=activeDialog;if(!host)return;
+  const preview=document.createElement('div');preview.className='cm-exercise-picker';
+  preview.innerHTML=`<section class="cm-picker-card cm-line-share" role="dialog" aria-modal="true" aria-label="分享本堂訓練至 LINE">
+    <div class="cm-picker-heading"><h3>分享本堂訓練</h3><button class="btn btn-sm" type="button" id="cm-line-close">返回編輯</button></div>
+    <p class="hint">本堂內容已儲存。請確認下方文字，再到 LINE 選擇學生傳送。</p>
+    <label class="cm-line-notes"><input type="checkbox" id="cm-line-include-notes" ${record.notes?'':'disabled'}>包含當天備註</label>
+    <textarea id="cm-line-preview" readonly aria-label="將分享至 LINE 的訓練文字"></textarea>
+    <div class="cm-actions"><a class="btn btn-primary" id="cm-line-open" target="_blank" rel="noopener noreferrer">開啟 LINE 選擇學生</a>
+    <button class="btn" type="button" id="cm-line-copy">複製文字</button></div>
+    <p id="cm-line-status" class="hint" role="status"></p>
+    <p class="hint">若未開啟 LINE，可複製文字，再貼到學生的聊天室。</p></section>`;
+  host.append(preview);const textarea=preview.querySelector('#cm-line-preview');
+  const update=()=>{
+    const message=buildTrainingShareText(student,lesson,record,{includeNotes:preview.querySelector('#cm-line-include-notes').checked});
+    textarea.value=message;
+    preview.querySelector('#cm-line-open').href='https://line.me/R/share?text='+encodeURIComponent(message);
+  };
+  const finish=()=>{preview.remove();host.querySelector('#cm-share-line')?.focus();};
+  preview.querySelector('#cm-line-close').onclick=finish;
+  preview.querySelector('#cm-line-include-notes').onchange=update;
+  preview.querySelector('#cm-line-open').onclick=()=>{preview.querySelector('#cm-line-status').textContent='請在 LINE 確認收件學生並完成傳送。';};
+  preview.querySelector('#cm-line-copy').onclick=async()=>{
+    const status=preview.querySelector('#cm-line-status');
+    try {await navigator.clipboard.writeText(textarea.value);status.textContent='已複製，可貼到學生的 LINE 聊天室。';}
+    catch {textarea.focus();textarea.select();status.textContent='請長按已選取的文字，選擇「複製」。';}
+  };
+  preview.addEventListener('click',e=>{if(e.target===preview)finish();});
+  preview.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finish();}},true);
+  update();preview.querySelector('#cm-line-close').focus();
+}
+async function buildTrainingImages(student,lesson,record,{includeNotes=false}={}) {
+  if(document.fonts)await document.fonts.ready;
+  const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1;
+  const ctx=canvas.getContext('2d');if(!ctx)throw Error('此瀏覽器無法產生圖片');
+  const family=getComputedStyle(document.body).getPropertyValue('--sans').trim()||'sans-serif';
+  const font=(size,weight=400)=>`${weight} ${size}px ${family}`;
+  const wrap=(value,width,size=28,weight=400)=>{
+    ctx.font=font(size,weight);const lines=[];
+    for(const paragraph of String(value||'').split('\n')){
+      let line='';for(const char of Array.from(paragraph)){
+        if(line&&ctx.measureText(line+char).width>width){lines.push(line);line=char;}else line+=char;
+      }lines.push(line);
+    }return lines;
+  };
+  const {bought,used}=trainingContractProgress(student,lesson);
+  const nameLines=wrap(student.name,620,50,700);
+  const dateY=198+nameLines.length*62+16;
+  const tableTop=Math.max(dateY+84,350)+30;
+  const rowItems=record.exercises.map(x=>{const lines=wrap(x.name,344,28,500);return {data:x,lines,height:Math.max(88,lines.length*38+34)};});
+  const pages=[{rows:[],notes:[]}];
+  const bottom=page=>tableTop+(page.rows.length?80+page.rows.reduce((n,r)=>n+r.height,0):0)
+    +(page.notes.length?(page.rows.length?36:0)+104+page.notes.length*42:0);
+  for(const row of rowItems){let page=pages[pages.length-1];
+    if(page.rows.length&&bottom(page)+row.height>2400){page={rows:[],notes:[]};pages.push(page);}page.rows.push(row);
+  }
+  if(includeNotes&&record.notes){
+    for(const line of wrap(record.notes,832,26)){
+      let page=pages[pages.length-1];const candidate={rows:page.rows,notes:[...page.notes,line]};
+      if(bottom(candidate)>2400&&(page.rows.length||page.notes.length)){page={rows:[],notes:[]};pages.push(page);}
+      page.notes.push(line);
+    }
+  }
+  const colors={ink:'#16213a',muted:'#687489',line:'#e3e8ef',soft:'#f2f4f8'};
+  const round=(x,y,w,h,r,color)=>{ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();ctx.fill();};
+  const text=(value,x,y,size=28,weight=400,color=colors.ink,align='left',maxWidth=null)=>{
+    let actual=size;ctx.font=font(actual,weight);
+    while(maxWidth&&ctx.measureText(String(value)).width>maxWidth&&actual>12){actual--;ctx.font=font(actual,weight);}
+    ctx.fillStyle=color;ctx.textAlign=align;ctx.textBaseline='top';ctx.fillText(String(value),x,y);
+  };
+  const results=[];const safeName=String(student.name||'學員').replace(/[\\/:*?"<>|\u0000-\u001f]/g,'_').slice(0,40);
+  for(let i=0;i<pages.length;i++){
+    const page=pages[i];canvas.height=Math.max(1350,Math.ceil(bottom(page)+150));
+    ctx.fillStyle='#eef1f6';ctx.fillRect(0,0,1080,canvas.height);
+    round(48,48,984,canvas.height-96,30,'#ffffff');
+    round(96,100,174,52,10,'#fff0b6');text('本堂訓練紀錄',114,113,22,700,'#6d5011');
+    nameLines.forEach((line,n)=>text(line,96,198+n*62,50,700));
+    const weekday=['日','一','二','三','四','五','六'][new Date(lesson.date+'T12:00:00').getDay()];
+    text(lesson.date.replaceAll('-',' / ')+(weekday?'（'+weekday+'）':''),96,dateY,24,400,colors.muted);
+    text(lesson.start+(lesson.end?'–'+lesson.end:''),96,dateY+42,24,400,colors.muted);
+    round(784,198,200,146,20,'#f0f3fa');text('本期進度',884,222,20,400,colors.muted,'center');text(bought+'－'+used,884,264,44,700,colors.ink,'center',168);
+    let y=tableTop;
+    if(page.rows.length){
+      round(96,y,888,80,12,colors.soft);text('動作',114,y+23,23,700,colors.muted);text('重量',496,y+23,23,700,colors.muted);text('次數',772,y+23,23,700,colors.muted,'center');text('組數',912,y+23,23,700,colors.muted,'center');y+=80;
+      for(const row of page.rows){
+        const x=row.data;row.lines.forEach((line,n)=>text(line,114,y+25+n*38,28,500));
+        text(weightText(x.weight,x.unit),496,y+25,28,400,colors.ink,'left',204);
+        text(x.reps,772,y+25,28,400,colors.ink,'center',110);text(x.sets,912,y+25,28,400,colors.ink,'center',110);
+        y+=row.height;ctx.strokeStyle=colors.line;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(96,y);ctx.lineTo(984,y);ctx.stroke();
+      }
+    }
+    if(page.notes.length){if(page.rows.length)y+=36;round(96,y,888,104+page.notes.length*42,16,'#f4f6fa');
+      text('當天備註'+(i&&pages[i-1].notes.length?'（續）':''),124,y+26,23,700,colors.muted);
+      page.notes.forEach((line,n)=>text(line,124,y+70+n*42,26));
+    }
+    round(96,canvas.height-105,50,4,2,'#f2c541');text('一堂課・一張紀錄',158,canvas.height-117,19,400,'#8b95a6');
+    if(pages.length>1)text((i+1)+'／'+pages.length+' 頁',984,canvas.height-117,19,400,'#8b95a6','right');
+    const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('圖片產生失敗，請重試')),'image/png'));
+    results.push({blob,width:1080,height:canvas.height,fileName:safeName+'-'+lesson.date+'-'+lesson.start.replace(':','')+(pages.length>1?'-'+(i+1):'')+'.png'});
+  }
+  return results;
+}
+function trainingImagePreview(student,lesson,record) {
+  const host=activeDialog;if(!host)return;
+  const preview=document.createElement('div');preview.className='cm-exercise-picker';
+  preview.innerHTML=`<section class="cm-picker-card cm-image-preview" role="dialog" aria-modal="true" aria-label="訓練紀錄圖片預覽">
+    <div class="cm-picker-heading"><h3>訓練紀錄圖片</h3><button class="btn btn-sm" type="button" id="cm-image-close">返回編輯</button></div>
+    <label class="cm-line-notes"><input type="checkbox" id="cm-image-notes" ${record.notes?'':'disabled'}>包含當天備註</label>
+    <div class="cm-actions"><button class="btn btn-primary" type="button" id="cm-image-share" disabled>分享／儲存圖片</button><span id="cm-image-downloads" class="cm-actions"></span></div>
+    <p class="hint" id="cm-image-status" role="status">正在產生圖片…</p>
+    <p class="hint">要加入 LINE 相簿，請先儲存圖片，再到學生聊天室的相簿新增。也可長按下方圖片儲存。</p>
+    <div id="cm-image-pages"></div></section>`;
+  host.append(preview);let generation=0,closed=false,urls=[],files=[];
+  const status=preview.querySelector('#cm-image-status');const share=preview.querySelector('#cm-image-share');
+  const refresh=async()=>{
+    const ticket=++generation;share.disabled=true;status.textContent='正在產生圖片…';
+    urls.forEach(url=>URL.revokeObjectURL(url));urls=[];files=[];
+    preview.querySelector('#cm-image-pages').innerHTML='';preview.querySelector('#cm-image-downloads').innerHTML='';
+    try {
+      const images=await buildTrainingImages(student,lesson,record,{includeNotes:preview.querySelector('#cm-image-notes').checked});
+      if(closed||ticket!==generation)return;
+      for(const url of urls)URL.revokeObjectURL(url);
+      urls=images.map(x=>URL.createObjectURL(x.blob));files=images.map(x=>new File([x.blob],x.fileName,{type:'image/png'}));
+      preview.querySelector('#cm-image-pages').innerHTML=images.map((x,i)=>`<img src="${urls[i]}" width="${x.width}" height="${x.height}" alt="${esc(student.name)}本堂訓練紀錄，第${i+1}張">`).join('');
+      preview.querySelector('#cm-image-downloads').innerHTML=images.map((x,i)=>`<a class="btn" href="${urls[i]}" download="${esc(x.fileName)}">下載圖片${images.length>1?' '+(i+1):''}</a>`).join('');
+      let supported=false;try{supported=!!navigator.share&&!!navigator.canShare&&navigator.canShare({files});}catch{}
+      share.hidden=!supported;share.disabled=!supported;
+      status.textContent=images.length>1?'內容較長，已完整分成 '+images.length+' 張圖片。':supported?'圖片已產生，可以分享或儲存。':'圖片已產生，請下載或長按圖片儲存。';
+    }catch(error){if(!closed&&ticket===generation)status.textContent=error.message||'圖片產生失敗，請重試';}
+  };
+  share.onclick=async()=>{
+    if(share.disabled||!files.length)return;
+    try{await navigator.share({files,title:'訓練紀錄'});status.textContent='圖片已交給系統分享功能。';}
+    catch(error){status.textContent=error.name==='AbortError'?'已取消分享，仍可下載下方圖片。':'無法開啟分享，請下載或長按圖片儲存。';}
+  };
+  const finish=()=>{closed=true;generation++;urls.forEach(url=>URL.revokeObjectURL(url));preview.remove();host.querySelector('#cm-make-image')?.focus();};
+  preview.querySelector('#cm-image-close').onclick=finish;
+  preview.querySelector('#cm-image-notes').onchange=refresh;
+  preview.addEventListener('click',e=>{if(e.target===preview)finish();});
+  preview.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finish();}},true);
+  preview.querySelector('#cm-image-close').focus();refresh();
+}
 function trainingSheet(lesson,studentId) {
   const student=studentById(studentId);if(!student){toast('找不到這位學生');return;}
   const original=lesson.training?.[studentId]||{exercises:[],notes:''};
@@ -11753,7 +11930,9 @@ function trainingSheet(lesson,studentId) {
   openSheet({title:student.name+'｜'+lesson.date.slice(5).replace('-','/')+' '+lesson.start+'｜'+bought+'－'+used,body:`
     <h3>這堂訓練內容</h3>
     <div class="cm-actions"><button class="btn" type="button" id="cm-add-exercise">新增動作</button>
-    <button class="btn" type="button" id="cm-copy-last" ${previous?'':'disabled'}>帶入上次${previous?'（'+esc(previous.date)+'）':''}</button></div>
+    <button class="btn" type="button" id="cm-copy-last" ${previous?'':'disabled'}>帶入上次${previous?'（'+esc(previous.date)+'）':''}</button>
+    <button class="btn" type="button" id="cm-share-line">分享文字至 LINE</button>
+    <button class="btn" type="button" id="cm-make-image">產生圖片</button></div>
     <div class="cm-training-table-wrap"><table class="cm-training-table cm-edit-training"><colgroup><col style="width:31%"><col style="width:32%"><col style="width:14%"><col style="width:14%"><col style="width:9%"></colgroup><thead><tr><th>動作</th><th>重量</th><th>次數</th><th>組數</th><th></th></tr></thead><tbody id="cm-exercises">${draft.exercises.map(markup).join('')}</tbody></table></div>
     <label>當天備註<textarea id="cm-training-notes" maxlength="5000">${esc(draft.notes||'')}</textarea></label>
     <label class="cm-course-picker">這堂課<select id="cm-training-course">${trainingLessons(studentId).map(l=>`<option value="${esc(l.id)}" ${l.id===lesson.id?'selected':''}>${esc(l.date)} ${esc(l.start)}${l.status==='cancelled'?'（已取消）':l.status==='absent'?'（缺席）':''}</option>`).join('')}</select></label>
@@ -11762,6 +11941,18 @@ function trainingSheet(lesson,studentId) {
     extraFoot:'<button class="btn btn-sm" type="button" id="cm-open-student-detail">學生資料</button>',
     autoFocus:false,confirmLabel:'儲存這堂紀錄',onMount:root=>{
       const list=root.querySelector('#cm-exercises');
+      root.querySelector('#cm-share-line').onclick=()=>{
+        const current=readTrainingForm(root.querySelector('#sheet-form'));if(!current)return;
+        if(!current.exercises.length){toast('請先新增至少一個訓練動作');return;}
+        const record=changed||!lesson.training?.[studentId]?storeTrainingRecord(lesson,studentId,current):lesson.training[studentId];
+        changed=false;trainingLineShare(student,lesson,cloneState(record));
+      };
+      root.querySelector('#cm-make-image').onclick=()=>{
+        const current=readTrainingForm(root.querySelector('#sheet-form'));if(!current)return;
+        if(!current.exercises.length){toast('請先新增至少一個訓練動作');return;}
+        const record=changed||!lesson.training?.[studentId]?storeTrainingRecord(lesson,studentId,current):lesson.training[studentId];
+        changed=false;trainingImagePreview(student,lesson,cloneState(record));
+      };
       root.querySelector('#cm-add-exercise').onclick=()=>{list.insertAdjacentHTML('beforeend',markup({}));changed=true;};
       root.querySelector('#sheet-form').addEventListener('input',e=>{if(e.target.id!=='cm-training-course')changed=true;});
       const mayLeave=()=>!changed||confirm('這堂紀錄還有未儲存的修改，確定離開？');
@@ -11781,15 +11972,8 @@ function trainingSheet(lesson,studentId) {
         const b=e.target.closest('[data-remove-exercise]');if(b){b.closest('.cm-exercise').remove();changed=true;}
       });
     },onConfirm:f=>{
-      if(!f.reportValidity())return false;
-      const exercises=[...f.querySelectorAll('.cm-exercise')].map(row=>{
-        const v=k=>row.querySelector(`[data-f="${k}"]`).value;
-        return {name:v('name').trim(),weight:Number(v('weight')),unit:v('unit'),reps:Number(v('reps')),sets:Number(v('sets'))};
-      });
-      if(exercises.some(x=>!x.name||!Number.isFinite(x.weight)||x.weight<0||!Number.isInteger(x.reps)||x.reps<1||!Number.isInteger(x.sets)||x.sets<1)){toast('請填寫動作名稱、有效重量及正整數次數／組數');return false;}
-      lesson.training={...(lesson.training||{}),[studentId]:{exercises,notes:f.querySelector('textarea').value.trim(),updatedAt:new Date().toISOString()}};
-      S.settings.customExerciseNames=[...new Set([...(S.settings.customExerciseNames||[]),...exercises.map(x=>x.name)])];
-      save();render();toast('已記錄，請查看上方雲端同步狀態');
+      const current=readTrainingForm(f);if(!current)return false;
+      storeTrainingRecord(lesson,studentId,current);render();toast('已記錄，請查看上方雲端同步狀態');
     }});
 }
 // 原本的學生與課程編輯入口，各加一個訓練紀錄入口。
