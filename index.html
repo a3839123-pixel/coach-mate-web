@@ -25,7 +25,7 @@ body {padding-top:56px;}
 #cm-gate[hidden] {display:none;}
 .cm-card {width:min(100%,460px);padding:24px;background:white;border:1px solid #d9dfe9;border-radius:18px;box-shadow:0 12px 40px #16213a12;}
 .cm-card label,.cm-exercise label {display:block;font-size:13px;margin:10px 0;}
-.cm-card input {font-size:16px;min-height:44px;display:block;width:100%;padding:12px;margin:6px 0 14px;border:1px solid #abb7c8;border-radius:8px;color:#16213a;background:white;}
+.cm-card input {display:block;width:100%;padding:12px;margin:6px 0 14px;border:1px solid #abb7c8;border-radius:8px;color:#16213a;background:white;}
 .cm-actions {display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;}
 .cm-exercise,.cm-history {padding:12px;margin:12px 0;border:1px solid var(--line,#ccd2dc);border-radius:12px;}
 .cm-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
@@ -11453,32 +11453,10 @@ function cloudUnlock() {
 function cloudShowLogin(message='') {
   C.ready=false;
   const gate=cloudGate('Coach Mate 雲端版', `<p>登入後查看學生、課程與訓練紀錄。</p>
-    <form id="cm-login"><label>電子郵件<input name="email" type="email" inputmode="email" autocapitalize="none" spellcheck="false" autocomplete="username" required></label>
+    <form id="cm-login"><label>電子郵件<input name="email" type="email" autocomplete="username" required></label>
     <label>密碼<input name="password" type="password" autocomplete="current-password" required></label>
-    <button class="btn btn-primary" type="submit">登入</button>
-    <button class="btn" type="button" id="cm-login-keyboard" hidden>鍵盤沒出現？點這裡</button><p id="cm-login-message" role="status">${esc(message)}</p></form>
+    <button class="btn btn-primary" type="submit">登入</button><p id="cm-login-message" role="status">${esc(message)}</p></form>
     <p class="hint">帳號請先在 Supabase 的 Authentication → Users 建立。密碼不用傳給任何人。</p>`);
-  // iPad Home Screen can restore a focused field without restoring its keyboard.
-  // Retry synchronously inside a real user click; delayed focus cannot summon
-  // the iOS software keyboard. Preserve credentials and selection.
-  const standalone=window.navigator.standalone===true ||
-    window.matchMedia('(display-mode: standalone)').matches;
-  const keyboardButton=gate.querySelector('#cm-login-keyboard');
-  if(standalone){
-    keyboardButton.hidden=false;
-    let lastField=gate.querySelector('input[name="email"]');
-    gate.querySelectorAll('input').forEach(input=>{
-      input.addEventListener('focus',()=>{lastField=input;});
-    });
-    keyboardButton.addEventListener('click',()=>{
-      const input=lastField;
-      let start=null,end=null;
-      try{start=input.selectionStart;end=input.selectionEnd;}catch{}
-      input.blur();
-      input.focus();
-      if(start!==null)try{input.setSelectionRange(start,end);}catch{}
-    });
-  }
   gate.querySelector('form').onsubmit=async e=>{
     e.preventDefault(); const f=e.target; const btn=f.querySelector('button'); btn.disabled=true;
     try {
