@@ -11,6 +11,7 @@
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC",sans-serif;color:#16213a;background:#f3f5f9;font-size:16px;color-scheme:light}
 *{box-sizing:border-box}body{margin:0}button,a,input{font:inherit}button{cursor:pointer;border:1px solid #cbd3e0;background:#fff;color:#16213a;border-radius:12px;padding:12px 18px;min-height:46px}button:disabled{opacity:.5;cursor:default}.primary{background:#f5ba00;border-color:#f5ba00;font-weight:700}.line{background:#06c755;color:#fff;border:0;font-weight:700}.muted,small{color:#66738b}.wrap{max-width:780px;margin:auto;padding:24px 16px max(28px,env(safe-area-inset-bottom))}.brand{font-size:14px;font-weight:700;letter-spacing:.08em;color:#283f87}h1{font-size:28px;margin:8px 0 12px}h2{font-size:20px;margin:0 0 16px}h3{font-size:17px;margin:0}.card{background:white;border:1px solid #e4e8ef;border-radius:20px;padding:22px;margin-top:18px}.gate{margin-top:36px;padding:30px 24px}.gate p{line-height:1.8}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.head{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}.summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}.stat{background:#edf1f8;border-radius:14px;padding:18px 14px}.stat strong{display:block;font-size:30px;margin:6px 0}.badge{display:inline-block;color:#283f87;background:#edf1f8;border-radius:8px;padding:5px 8px;font-size:13px}.lesson{border-top:1px solid #e4e8ef;padding:16px 0}.lesson:first-of-type{border-top:0}.lesson:last-child{padding-bottom:0}.slot{margin:8px 0 12px;color:#66738b}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:15px;table-layout:fixed}th,td{padding:12px 5px;border-bottom:1px solid #e4e8ef;text-align:center;overflow-wrap:anywhere}th{color:#66738b;font-size:13px}th:first-child,td:first-child{text-align:left;width:43%}th:nth-child(2){width:25%}td:nth-child(2){font-variant-numeric:tabular-nums}td:last-child,td:nth-last-child(2){width:16%}.empty{color:#66738b;font-size:14px;margin:12px 0;line-height:1.7}.pager{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:20px}.pager button{padding:10px}.notice{line-height:1.7;font-size:14px}.foot{font-size:12px;color:#66738b;text-align:center;margin:24px 0}#status{font-size:14px;line-height:1.7;margin:14px 0;min-height:24px}a{color:#283f87}input{width:100%;padding:12px;border-radius:10px;border:1px solid #cbd3e0}button:focus-visible,a:focus-visible{outline:3px solid #839bd7;outline-offset:3px}@media(max-width:360px){.wrap{padding:18px 12px}.card{padding:18px 14px}td,th{padding:10px 3px;font-size:14px}.stat strong{font-size:26px}}
+.exercise-name{display:flex;align-items:center;gap:7px;min-width:0}.exercise-name>span:last-child{min-width:0;overflow-wrap:anywhere}.exercise-icon{display:block;flex:0 0 36px;width:36px;height:36px;border-radius:10px;background:#edf1f8;color:#283f87;padding:3px}.exercise-icon svg{display:block;width:100%;height:100%}@media(max-width:360px){.exercise-icon{flex-basis:30px;width:30px;height:30px;padding:2px}.exercise-name{gap:5px}}
 </style>
 </head>
 <body>
@@ -65,9 +66,59 @@ function errorGate(code){
   }else if(code==='PORTAL_LOGIN_REQUIRED')gate(title,message,'重新登入',login);
   else gate(title,message,'重新整理',()=>load());
 }
+// 學員端的內嵌向量小圖：不下載圖檔、不更動教練輸入或訓練資料。
+// 以已知名稱對應動作示意；未知／自訂動作保留純文字，避免硬套錯誤圖案。
+const EXERCISE_PICTOGRAMS={
+  squat:{head:[32,10],body:'M30 19L23 34L42 37L36 54L47 54M29 22L47 24',equipment:''},
+  lunge:{head:[30,9],body:'M30 18L29 32L44 35L44 54L53 54M29 32L18 43L11 51L20 51M29 21L39 28L46 25',equipment:''},
+  hinge:{head:[43,15],body:'M38 21L21 32L28 44L24 54L34 54M33 25L38 43',equipment:'M29 45H49M30 40V50M48 40V50'},
+  bridge:{head:[11,43],body:'M19 44L34 29L48 37L54 51M20 47L35 47',equipment:'M6 54H59'},
+  legpress:{head:[14,18],body:'M17 26L24 40L37 36L46 23M23 40L30 49M20 30L29 32',equipment:'M7 27L17 48H33M45 16L54 25M50 21L59 8'},
+  extension:{head:[24,10],body:'M24 19V35L40 35L51 25M25 23L34 29',equipment:'M14 39H36M17 39V54M33 39V54'},
+  legcurl:{head:[24,10],body:'M24 19V35L42 35L34 48M24 22L33 28',equipment:'M14 39H40M17 39V54M36 39V54'},
+  calf:{head:[31,9],body:'M31 18V35L28 48L38 48M31 35L39 47M31 23L43 23',equipment:'M22 53H46'},
+  pulldown:{head:[31,22],body:'M31 31V43L45 44L45 54M31 32L19 24L17 13M31 32L43 24L45 13',equipment:'M14 10H49M22 46H39M25 46V56'},
+  pullup:{head:[31,20],body:'M31 29V42L23 53M31 42L40 53M31 30L19 21L18 9M31 30L43 21L45 9',equipment:'M10 7H53'},
+  row:{head:[34,12],body:'M29 20L20 34L29 45L24 54L34 54M29 23L41 28L38 39',equipment:'M31 44H48M32 40V48M47 40V48'},
+  chestpress:{head:[14,34],body:'M23 36H42L49 49L55 49M29 35L29 17M39 35L39 17',equipment:'M9 41H44M14 41V54M40 41V54M23 14H46M24 10V18M45 10V18'},
+  fly:{head:[32,10],body:'M32 19V38L24 54M32 38L41 54M31 23L17 28L9 20M33 23L47 28L55 20',equipment:'M6 16L12 24M52 16L58 24'},
+  pushup:{head:[48,21],body:'M40 26L22 35L10 43L6 43M39 27L44 35L39 44L47 44',equipment:'M5 49H59'},
+  press:{head:[32,22],body:'M32 31V42L24 55M32 42L41 55M31 32L18 23L18 10M33 32L46 23L46 10',equipment:'M11 8H24M40 8H53'},
+  lateral:{head:[32,10],body:'M32 19V38L24 54M32 38L41 54M31 23L10 26M33 23L54 26',equipment:'M7 22V30M57 22V30'},
+  curl:{head:[30,10],body:'M30 19V37L23 54M30 37L38 54M30 23L42 34L48 23',equipment:'M43 21H53M44 17V25M52 17V25'},
+  triceps:{head:[27,10],body:'M27 19V37L20 54M27 37L36 54M27 23L41 25L41 40',equipment:'M39 5V22M36 43H48'},
+  plank:{head:[48,27],body:'M40 32L24 36L11 44L6 44M40 33L44 44H54',equipment:'M5 50H59'},
+  sideplank:{head:[43,18],body:'M38 25L24 38L12 48L7 48M36 27L44 46H52M35 27L24 15',equipment:'M5 53H59'},
+  crunch:{head:[37,24],body:'M32 32L23 44L39 44L46 33L55 47M33 32L43 28',equipment:'M8 53H59'},
+  deadbug:{head:[12,43],body:'M20 44H38L39 27L50 27M25 43L26 24M38 44L48 50',equipment:'M6 55H59'},
+  birddog:{head:[49,25],body:'M41 29H26L18 29H7M27 30L28 48H39M39 30L48 32H58',equipment:'M6 54H59'},
+  carry:{head:[32,9],body:'M32 18V35L22 53M32 35L43 51M31 22L20 36M33 22L45 36',equipment:'M15 41H25V49H15ZM40 41H50V49H40Z'},
+  rotation:{head:[32,10],body:'M32 19V37L23 54M32 37L42 54M31 24L44 24L47 30',equipment:'M16 17Q7 25 15 33M10 32L16 34L17 28'},
+  catcow:{head:[47,23],body:'M41 29Q31 18 22 30M24 29V49H32M40 29V49H48',equipment:'M10 54H58'}
+};
+function exercisePictogramKind(name){
+  const n=String(name||'').trim().toLowerCase();
+  const rules=[
+    ['sideplank',/側平板|side\s*plank/],['birddog',/鳥狗|bird\s*dog/],['deadbug',/死蟲|dead\s*bug/],
+    ['catcow',/貓牛|cat.?cow/],['legpress',/腿推|大腿推舉|leg\s*press/],['extension',/腿屈伸|leg\s*extension/],
+    ['legcurl',/腿彎舉|leg\s*curl/],['calf',/提踵|calf\s*raise/],['bridge',/臀推|臀橋|橋式|hip\s*thrust|glute\s*bridge/],
+    ['lunge',/弓箭步|分腿蹲|lunge|split\s*squat/],['squat',/深蹲|單腳蹲|squat/],['hinge',/硬舉|早安式|deadlift|good\s*morning/],
+    ['pulldown',/下拉|pulldown/],['pullup',/引體向上|pull.?up|chin.?up/],['row',/划船|row/],
+    ['pushup',/伏地挺身|push.?up/],['chestpress',/臥推|胸推|bench\s*press|chest\s*press/],['fly',/夾胸|^(?:上斜)?啞鈴飛鳥$|chest\s*fly/],
+    ['press',/肩推|shoulder\s*press|overhead\s*press/],['lateral',/側平舉|lateral\s*raise/],
+    ['curl',/二頭|錘式彎舉|集中彎舉|牧師椅彎舉|反向彎舉|bicep|hammer\s*curl/],
+    ['triceps',/三頭|tricep/],['plank',/平板撐|plank/],['crunch',/捲腹|crunch/],['carry',/農夫走路|farmer/],['rotation',/脊椎旋轉|胸椎旋轉/]
+  ];
+  return rules.find(([,pattern])=>pattern.test(n))?.[0]||null;
+}
+function exercisePictogram(name){
+  const kind=exercisePictogramKind(name),icon=EXERCISE_PICTOGRAMS[kind];
+  if(!icon)return '';
+  return `<span class="exercise-icon" data-exercise-icon="${kind}" aria-hidden="true"><svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" focusable="false"><circle cx="${icon.head[0]}" cy="${icon.head[1]}" r="5.5" fill="currentColor"/><path d="${icon.body}" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>${icon.equipment?`<path d="${icon.equipment}" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`:''}</svg></span>`;
+}
 function exerciseTable(rows){
   if(!rows.length)return '<p class="empty">教練尚未填寫這堂訓練內容。</p>';
-  return `<div class="table-wrap"><table><thead><tr><th>動作</th><th>重量</th><th>次數</th><th>組數</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.weight===0?'徒手':x.weight+' '+x.unit)}</td><td>${esc(x.reps)}</td><td>${esc(x.sets)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th>動作</th><th>重量</th><th>次數</th><th>組數</th></tr></thead><tbody>${rows.map(x=>`<tr><td><span class="exercise-name">${exercisePictogram(x.name)}<span>${esc(x.name)}</span></span></td><td>${esc(x.weight===0?'徒手':x.weight+' '+x.unit)}</td><td>${esc(x.reps)}</td><td>${esc(x.sets)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function render(data){
   currentPage=data.page;
