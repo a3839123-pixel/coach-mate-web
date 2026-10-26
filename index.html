@@ -11453,15 +11453,28 @@ function cloudUnlock() {
 function cloudShowLogin(message='') {
   C.ready=false;
   const gate=cloudGate('Coach Mate 雲端版', `<p>登入後查看學生、課程與訓練紀錄。</p>
-    <form id="cm-login"><label>電子郵件<input name="email" type="email" autocomplete="username" required></label>
+    <form id="cm-login"><label>電子郵件<input name="email" type="email" inputmode="email" autocapitalize="none" spellcheck="false" autocomplete="username" required></label>
     <label>密碼<input name="password" type="password" autocomplete="current-password" required></label>
+    <label style="display:flex;align-items:center;gap:8px"><input id="cm-remember-email" type="checkbox" checked style="width:18px;height:18px;margin:0">在這台裝置記住電子郵件</label>
     <button class="btn btn-primary" type="submit">登入</button><p id="cm-login-message" role="status">${esc(message)}</p></form>
     <p class="hint">帳號請先在 Supabase 的 Authentication → Users 建立。密碼不用傳給任何人。</p>`);
+  // Only the email is stored locally; never persist the password here.
+  const rememberedEmailKey='coach-mate:remembered-email';
+  const loginForm=gate.querySelector('form');
+  const rememberEmail=gate.querySelector('#cm-remember-email');
+  try{loginForm.elements.email.value=localStorage.getItem(rememberedEmailKey)||'';}catch{}
+  rememberEmail.addEventListener('change',()=>{
+    if(!rememberEmail.checked)try{localStorage.removeItem(rememberedEmailKey);}catch{}
+  });
   gate.querySelector('form').onsubmit=async e=>{
     e.preventDefault(); const f=e.target; const btn=f.querySelector('button'); btn.disabled=true;
     try {
       const {data,error}=await C.client.auth.signInWithPassword({email:f.email.value.trim(),password:f.password.value});
       if(error)throw error;
+      try{
+        if(rememberEmail.checked)localStorage.setItem(rememberedEmailKey,f.elements.email.value.trim());
+        else localStorage.removeItem(rememberedEmailKey);
+      }catch{}
       f.password.value=''; await cloudStart(data.session);
     } catch(err) { gate.querySelector('#cm-login-message').textContent='登入失敗：'+err.message; }
     finally {btn.disabled=false;}
