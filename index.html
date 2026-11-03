@@ -1076,7 +1076,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-11-03 · cloud-16-annual-pay";
+const BUILD = "2026-11-03 · cloud-17-pay-bottom";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -8961,16 +8961,15 @@ function viewAnalysis() {
     </div>
 
     ${jumpBar([
-      ["sec-monthly-pay", "薪水"],
       ["sec-sales", "銷售"],
       ...(assessment ? [["sec-assessment", "檢測"]] : []),
       ["sec-conversion", "成交率"],
       ["sec-leads", "名單"], ["sec-profile", "客群"], ["sec-ranking", "排行榜"],
       ["sec-year", "年度"], ["sec-metrics", "指標"],
+      ["sec-monthly-pay", "薪水"],
     ])}
 
     <div class="stack">
-      ${analysisMonthlyPaySection()}
       ${salesSection()}
       ${assessment}
       <section class="card" id="sec-conversion">
@@ -9068,6 +9067,7 @@ function viewAnalysis() {
         <div class="row"><div class="row-main">平均購買堂數</div><div class="row-end mono">${avgSessions.toFixed(1)} 堂</div></div>
         <div class="row"><div class="row-main">還有堂數的學生</div><div class="row-end mono">${students.filter((s) => s.remaining > 0).length} 位</div></div>
       </section>
+      ${analysisMonthlyPaySection()}
     </div>`;
 }
 
