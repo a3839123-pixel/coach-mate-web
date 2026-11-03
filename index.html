@@ -1076,7 +1076,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-11-02 · cloud-14-warmup";
+const BUILD = "2026-11-02 · cloud-15-monthly-pay";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -8868,6 +8868,45 @@ function assessmentSection() {
     </section>`;
 }
 
+/** 上個月依實際授課計算，不把整份合約預收當薪水。 */
+function analysisMonthlyPay(ym) {
+  let sessions = 0, classes = 0, revenue = 0;
+  for (const lesson of S.lessons) {
+    if (!(lesson.date || "").startsWith(ym + "-") || !CONSUMING.includes(lesson.status)
+      || !LESSON_KIND[kindOf(lesson)].paid) continue;
+    const learners = [...new Set([lesson.studentId, lesson.partnerId].filter(Boolean))]
+      .map(studentById).filter(Boolean);
+    if (!learners.length) continue;
+    classes++;
+    sessions += unitsOf(lesson);
+    for (const learner of learners) revenue += unitsOf(lesson) * sessionPrice(learner);
+  }
+  const rent = venueCostFor(ym);
+  const missingLocations = countsVenueCost() ? S.lessons.filter((lesson) =>
+    (lesson.date || "").startsWith(ym + "-") && VENUE_BILLABLE.includes(lesson.status)
+    && ((!lesson.studentId && !lesson.partnerId && S.settings.employment === "independent")
+      || [lesson.studentId, lesson.partnerId].map(studentById).some(st => st && isIndependentStudent(st)))
+    && !venueOf(lesson)).length : 0;
+  return { ym, sessions, classes, revenue: Math.round(revenue), rent: rent.total,
+    net: Math.round(revenue) - rent.total, missingLocations };
+}
+
+function analysisMonthlyPaySection() {
+  const ym = spanBounds("month", 1).from.slice(0, 7);
+  const pay = analysisMonthlyPay(ym);
+  return `<section class="card" id="sec-monthly-pay">
+    <div class="sec-head"><h2 class="sec-title">上個月薪水</h2><span class="sec-sub">${esc(ym)}</span></div>
+    <div class="tiles">
+      ${tile({value:pay.sessions,unit:"堂",label:"已上課堂數",iconName:"calendar",note:pay.classes + " 筆課程；共同課不重複計堂"})}
+      ${tile({value:money(pay.revenue),label:"上課收入",iconName:"money",note:"依已出席／遲到的正課計算"})}
+      ${tile({value:money(pay.rent),label:"扣除場租",iconName:"money",note:"沿用場館的固定費用／比例設定"})}
+      ${tile({value:money(pay.net),label:"薪水（扣場租後）",iconName:"money",color:pay.net < 0 ? "var(--warn)" : "var(--good)",note:pay.missingLocations ? "場租資料未齊，金額暫估" : "上課收入 − 場租"})}
+    </div>
+    ${pay.missingLocations ? `<p class="hint" style="color:var(--warn)">有 ${pay.missingLocations} 筆課程未填地點或未對應場館，場租可能漏算，請補齊後確認。</p>` : ""}
+    <p class="hint">上課收入以學生目前的單堂費用試算，非當月收款，也不含底薪、抽成、獎金、稅費或其他支出。場租沿用既有規則，包含已發生的缺席與檢測場租。</p>
+  </section>`;
+}
+
 function viewAnalysis() {
   const students = activeStudents();
   const conv = conversionStats();
@@ -8902,6 +8941,7 @@ function viewAnalysis() {
     </div>
 
     ${jumpBar([
+      ["sec-monthly-pay", "薪水"],
       ["sec-sales", "銷售"],
       ...(assessment ? [["sec-assessment", "檢測"]] : []),
       ["sec-conversion", "成交率"],
@@ -8910,6 +8950,7 @@ function viewAnalysis() {
     ])}
 
     <div class="stack">
+      ${analysisMonthlyPaySection()}
       ${salesSection()}
       ${assessment}
       <section class="card" id="sec-conversion">
