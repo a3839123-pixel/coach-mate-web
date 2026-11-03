@@ -1076,7 +1076,7 @@ const NOTICE_KEY = "coach-mate-web-notice-dismissed";
  * 版本標記。顯示在設定頁最下面，教練唸得出來就知道他手上是哪一版，
  * 不用再猜是不是拿到舊的快取。每次改版就把這個字串往上加。
  */
-const BUILD = "2026-11-02 · cloud-15-monthly-pay";
+const BUILD = "2026-11-03 · cloud-16-annual-pay";
 
 /** 開發者署名，顯示在設定頁的「關於」 */
 const DEVELOPER = "杯子蛋糕好好吃";
@@ -8891,17 +8891,37 @@ function analysisMonthlyPay(ym) {
     net: Math.round(revenue) - rent.total, missingLocations };
 }
 
+let analysisPayYear = "";
+let analysisPayMonth = "";
+
 function analysisMonthlyPaySection() {
-  const ym = spanBounds("month", 1).from.slice(0, 7);
-  const pay = analysisMonthlyPay(ym);
+  const [defaultYear, defaultMonth] = spanBounds("month", 1).ym.split("-");
+  const year = analysisPayYear || defaultYear;
+  const month = analysisPayMonth || defaultMonth;
+  const years = [...new Set([year, defaultYear, spanBounds("month").ym.slice(0, 4),
+    ...S.lessons.map(l => /^(\d{4})-/.exec(l.date || "")?.[1]).filter(Boolean)])].sort().reverse();
+  const months = Array.from({length: 12}, (_, i) => pad(i + 1));
+  const annual = month === "all";
+  const rows = annual ? months.map(m => analysisMonthlyPay(year + "-" + m)) : [];
+  const fields = ["sessions", "classes", "revenue", "rent", "net", "missingLocations"];
+  const pay = annual ? Object.fromEntries(fields.map(key =>
+    [key, rows.reduce((sum, row) => sum + row[key], 0)])) : analysisMonthlyPay(year + "-" + month);
   return `<section class="card" id="sec-monthly-pay">
-    <div class="sec-head"><h2 class="sec-title">上個月薪水</h2><span class="sec-sub">${esc(ym)}</span></div>
+    <div class="sec-head"><h2 class="sec-title">薪水試算</h2><span class="sec-sub">${esc(year)} 年${annual ? "全年" : " " + Number(month) + " 月"}</span></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <label>年份 <select data-analysis-pay-year>${years.map(y => `<option value="${esc(y)}" ${y === year ? "selected" : ""}>${esc(y)} 年</option>`).join("")}</select></label>
+      <label>月份 <select data-analysis-pay-month>${months.map(m => `<option value="${m}" ${m === month ? "selected" : ""}>${Number(m)} 月</option>`).join("")}<option value="all" ${annual ? "selected" : ""}>全年合計</option></select></label>
+    </div>
     <div class="tiles">
       ${tile({value:pay.sessions,unit:"堂",label:"已上課堂數",iconName:"calendar",note:pay.classes + " 筆課程；共同課不重複計堂"})}
       ${tile({value:money(pay.revenue),label:"上課收入",iconName:"money",note:"依已出席／遲到的正課計算"})}
       ${tile({value:money(pay.rent),label:"扣除場租",iconName:"money",note:"沿用場館的固定費用／比例設定"})}
       ${tile({value:money(pay.net),label:"薪水（扣場租後）",iconName:"money",color:pay.net < 0 ? "var(--warn)" : "var(--good)",note:pay.missingLocations ? "場租資料未齊，金額暫估" : "上課收入 − 場租"})}
     </div>
+    ${annual ? `<div class="cm-training-table-wrap"><table class="cm-training-table">
+      <thead><tr><th>月份</th><th>堂數</th><th>收入</th><th>場租</th><th>扣場租後</th></tr></thead>
+      <tbody>${rows.map((row, i) => `<tr><td>${i + 1} 月</td><td>${row.sessions}</td><td>${money(row.revenue)}</td><td>${money(row.rent)}</td><td>${money(row.net)}</td></tr>`).join("")}</tbody>
+    </table></div>` : ""}
     ${pay.missingLocations ? `<p class="hint" style="color:var(--warn)">有 ${pay.missingLocations} 筆課程未填地點或未對應場館，場租可能漏算，請補齊後確認。</p>` : ""}
     <p class="hint">上課收入以學生目前的單堂費用試算，非當月收款，也不含底薪、抽成、獎金、稅費或其他支出。場租沿用既有規則，包含已發生的缺席與檢測場租。</p>
   </section>`;
@@ -11001,6 +11021,15 @@ document.addEventListener("input", (e) => {
 
 /* 下拉選單改狀態 */
 document.addEventListener("change", (e) => {
+  if (e.target.matches("[data-analysis-pay-year], [data-analysis-pay-month]")) {
+    const isYear = e.target.matches("[data-analysis-pay-year]");
+    if (isYear) analysisPayYear = e.target.value;
+    else analysisPayMonth = e.target.value;
+    document.getElementById("sec-monthly-pay").outerHTML = analysisMonthlyPaySection();
+    document.querySelector(isYear ? "[data-analysis-pay-year]" : "[data-analysis-pay-month]").focus();
+    return;
+  }
+
   // 銷售統計的自訂起訖日
   if (e.target.matches("[data-sales-from]")) { salesFrom = e.target.value; render(); return; }
   if (e.target.matches("[data-sales-to]")) { salesTo = e.target.value; render(); return; }
